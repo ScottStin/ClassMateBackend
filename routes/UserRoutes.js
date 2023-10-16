@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
     const users = await userModel.find();
     res.json(users);
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error getting users:", error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -26,7 +26,7 @@ router.post('/', async (req, res) => {
     await newUser.save();
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error creating user:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -48,7 +48,7 @@ router.post('/login', async (req, res) => {
     res.status(200).json({ token, userId: user._id, user });
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error logging in:", error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

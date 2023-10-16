@@ -82,9 +82,10 @@ const PORT = 3000; // || process.env.PORT
  * ==============================
 */
 
-// const LessonModel = require('./models/lesson-model');
+const LessonModel = require('./models/lesson-model');
 // const ExamModel = require('./models/exam-model');
 const UserModel = require('./models/user-models');
+const LessonTypeModel = require('./models/lesson-type-model');
 
 /**
  * ==============================
@@ -146,13 +147,15 @@ app.get('/test', (req, res) => {
   res.json({ message: 'Hello from Express!' });
 });
 
-// const lessonRouter = require('./routes/LessonRoutes');
+const lessonRouter = require('./routes/LessonRoutes');
 const userRouter = require('./routes/UserRoutes');
+const lessonTypeRouter = require('./routes/LessonTypeRoutes');
 // const examRouter = require('./routes/ExamRoutes');
 
 app.use('/users', userRouter);
 // app.use('/exams', examRouter);
-// app.use('/lessons', lessonRouter);
+app.use('/lessons', lessonRouter);
+app.use('/lesson-types', lessonTypeRouter);
 
 /**
  * ==============================
