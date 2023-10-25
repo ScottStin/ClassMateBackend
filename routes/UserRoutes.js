@@ -8,6 +8,12 @@ const jwt = require('jsonwebtoken');
 
 const userModel = require('../models/user-models');
 
+/**
+ * ==============================
+ *  Get all Users:
+ * ==============================
+*/
+
 router.get('/', async (req, res) => {
   try {
     const users = await userModel.find();
@@ -18,18 +24,30 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * ==============================
+ *  Create new user:
+ * ==============================
+*/
+
 router.post('/', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(req.body.unhashedPassword, 12)
     const newUser = await new userModel(req.body);
     newUser.hashedPassword = hashedPassword;
-    await newUser.save();
-
+    const createdUser = await newUser.save();
+    res.status(201).json(createdUser);
   } catch (error) {
     console.error("Error creating user:", error);
     res.status(500).send("Internal Server Error");
   }
 });
+
+/**
+ * ==============================
+ *  Login:
+ * ==============================
+*/
 
 router.post('/login', async (req, res) => {
   try {
