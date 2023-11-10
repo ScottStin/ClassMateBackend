@@ -45,6 +45,56 @@ router.post('/', async (req, res) => {
 
 /**
  * ==============================
+ *  Update user:
+ * ==============================
+*/
+
+router.patch('/:id', async (req, res) => {
+  try {
+    const updatedUser = await userModel.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).send('User not found');
+    }
+
+    console.log('Updated User:', updatedUser);
+    res.status(201).json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * ==============================
+ *  Delete user:
+ * ==============================
+*/
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedUser = await userModel.findByIdAndDelete(
+      req.params.id,
+    );
+
+    if (!deletedUser) {
+      return res.status(404).send('User not found');
+    }
+
+    console.log('Deleted User:', deletedUser);
+    res.status(201).json(deletedUser);
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * ==============================
  *  Login:
  * ==============================
 */
