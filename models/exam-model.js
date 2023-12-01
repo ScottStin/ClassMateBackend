@@ -19,6 +19,9 @@ const examSchema = mongoose.Schema({
     description:{
         type: String,
     },
+    questions: [
+        { type: String }
+    ],
     casualPrice:{
         type: Number,
     },
@@ -31,6 +34,9 @@ const examSchema = mongoose.Schema({
     autoMarking:{
         type: Boolean,
     },
+    // school: {
+    //     type: String | Number | null,
+    // },
 }, {
     timestamps: true
 })
