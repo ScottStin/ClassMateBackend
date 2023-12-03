@@ -14,6 +14,44 @@ router.get('/', async function (req, res) {
     }
 });
 
+router.post('/new', async (req, res) => {
+  try {
+    const createdExam = await examModel.insertMany(req.body);
+    console.log(createdExam);
+    res.status(201).json(createdExam);
+  } catch (error) {
+    console.error("Error creating new exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/register/:id', async (req, res) => {
+  try {
+    console.log(req.params.id);
+    console.log(req.body.email);
+
+    const exam = await examModel.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json('Exam not found');
+    }
+
+    const userEmail = req.body.email;
+
+    if (exam.studentsEnrolled.includes(userEmail)) {
+      return res.status(400).json('User has already signed up for this exam');
+    }
+
+    exam.studentsEnrolled.push(userEmail);
+    await exam.save();
+
+    res.json(`Student added to: ${exam}`);
+  } catch (error) {
+    console.error("Error join exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
     try {
       const deletedExam = await examModel.findByIdAndDelete(req.params.id);
