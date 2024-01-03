@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const examModel = require('../models/exam-model');
+const questionModel = require("../models/question-model");
 
 router.get('/', async function (req, res) {
     try {
@@ -16,11 +17,41 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
-    const createdExam = await examModel.insertMany(req.body);
+    const createdExam = await examModel.create(req.body.exam);
     console.log(createdExam);
+    const questionIds = [];
+    for (let question of req.body.questions) {
+      console.log('hit1')
+      console.log(question);
+      // const { parent, subQuestion, ...questionData } = question;    
+      const { subQuestions, id, ...questionData } = question;    
+      const createdQuestion = await questionModel.create(questionData);
+      // if (parent) {
+      //   createdQuestion.parent = createdQuestion.id;
+      //   await createdQuestion.save();
+      // }
+      if (subQuestions?.length > 0) {
+        console.log('hit2')
+        console.log(subQuestions)
+        for (let question of subQuestions) {
+          const { id, ...questionWithoutId } = question;
+          const questionData = {
+            ...questionWithoutId,
+            parent: createdQuestion.id,
+          };
+          const createdSubQuestion = await questionModel.create(questionData);
+          createdQuestion.subQuestions.push(createdSubQuestion.id);
+          await createdQuestion.save();
+        }
+      }
+      console.log(createdQuestion);
+      questionIds.push(createdQuestion.id);
+    }
+    createdExam.questions = questionIds;
+    await createdExam.save();
     res.status(201).json(createdExam);
   } catch (error) {
-    console.error("Error creating new exam:", error);
+    console.error("Error creating new exam or adding questions:", error);
     res.status(500).send("Internal Server Error");
   }
 });
