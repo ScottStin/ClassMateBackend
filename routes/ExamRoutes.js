@@ -21,18 +21,9 @@ router.post('/new', async (req, res) => {
     console.log(createdExam);
     const questionIds = [];
     for (let question of req.body.questions) {
-      console.log('hit1')
-      console.log(question);
-      // const { parent, subQuestion, ...questionData } = question;    
       const { subQuestions, id, ...questionData } = question;    
       const createdQuestion = await questionModel.create(questionData);
-      // if (parent) {
-      //   createdQuestion.parent = createdQuestion.id;
-      //   await createdQuestion.save();
-      // }
       if (subQuestions?.length > 0) {
-        console.log('hit2')
-        console.log(subQuestions)
         for (let question of subQuestions) {
           const { id, ...questionWithoutId } = question;
           const questionData = {
@@ -44,7 +35,6 @@ router.post('/new', async (req, res) => {
           await createdQuestion.save();
         }
       }
-      console.log(createdQuestion);
       questionIds.push(createdQuestion.id);
     }
     createdExam.questions = questionIds;
@@ -78,7 +68,7 @@ router.patch('/register/:id', async (req, res) => {
 
     res.json(`Student added to: ${exam}`);
   } catch (error) {
-    console.error("Error join exam:", error);
+    console.error("Error joining exam:", error);
     res.status(500).send("Internal Server Error");
   }
 });

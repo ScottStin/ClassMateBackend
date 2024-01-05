@@ -32,6 +32,12 @@ const questionSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'questionModel'
     }],
+    studentResponse: [{
+        student: { type: String, default: null },
+        response: { type: String, default: null },
+        mark: { type: Number, default: null },
+        feedback: { text: {type: String, default: null}, teacher: {type: String, default: null} }
+      }],
     parent: { type: String, default: null },
 }, { timestamps: true });
 

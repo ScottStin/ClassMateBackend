@@ -10,6 +10,9 @@ const examSchema = mongoose.Schema({
     description:{
         type: String,
     },
+    instructions:{
+        type: String,
+    },
     studentsEnrolled:[
         { type: String }
     ],

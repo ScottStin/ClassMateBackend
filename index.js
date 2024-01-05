@@ -86,6 +86,7 @@ const LessonModel = require('./models/lesson-model');
 const ExamModel = require('./models/exam-model');
 const UserModel = require('./models/user-models');
 const LessonTypeModel = require('./models/lesson-type-model');
+const questionModel = require('./models/question-model');
 
 /**
  * ==============================
@@ -151,9 +152,11 @@ const lessonRouter = require('./routes/LessonRoutes');
 const userRouter = require('./routes/UserRoutes');
 const lessonTypeRouter = require('./routes/LessonTypeRoutes');
 const examRouter = require('./routes/ExamRoutes');
+const questionRouter = require('./routes/QuestionRoutes');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
+app.use('/questions', questionRouter);
 app.use('/lessons', lessonRouter);
 app.use('/lesson-types', lessonTypeRouter);
 
