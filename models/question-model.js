@@ -35,7 +35,7 @@ const questionSchema = mongoose.Schema({
     studentResponse: [{
         student: { type: String, default: null },
         response: { type: String, default: null },
-        mark: { type: Number, default: null },
+        mark: { type: String, default: null },
         feedback: { text: {type: String, default: null}, teacher: {type: String, default: null} }
       }],
     parent: { type: String, default: null },

@@ -16,9 +16,15 @@ const examSchema = mongoose.Schema({
     studentsEnrolled:[
         { type: String }
     ],
-    studentsCompleted:[
-        { type: String }
+    studentsCompleted: [
+        {
+            email: { type: String },
+            mark: {type: String, default: null}
+        }
     ],
+    totalPoints: {
+        type: Number
+    },
     description:{
         type: String,
     },
