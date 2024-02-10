@@ -6,7 +6,7 @@ const examModel = require("../models/exam-model");
 
 router.get('/', async function (req, res) {
     try {
-        console.log('hit2')
+        console.log('hit questions')
         await questionModel.find()
         .then(questions => {res.json(questions)})
         .catch(err => res.status(400).json('Error: ' + err));

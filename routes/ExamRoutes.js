@@ -15,10 +15,32 @@ router.get('/', async function (req, res) {
     }
 });
 
+// router.patch('/register-default', async (req, res) => {
+//   try {
+//     const exam = await examModel.findOne({ default: true });
+//     if (!exam) {
+//       return res.status(404).json('Default exam not found');
+//     }
+
+//     const userEmail = req.body.email;
+
+//     if (exam.studentsEnrolled.includes(userEmail)) {
+//       return res.status(400).json('User has already signed up for this exam');
+//     }
+
+//     exam.studentsEnrolled.push(userEmail);
+//     await exam.save();
+
+//     res.json(`Student added to: ${exam}`);
+//   } catch (error) {
+//     console.error("Error joining default exam:", error);
+//     res.status(500).send("Internal Server Error");
+//   }
+// });
+
 router.post('/new', async (req, res) => {
   try {
     const createdExam = await examModel.create(req.body.exam);
-    console.log(createdExam);
     const questionIds = [];
     for (let question of req.body.questions) {
       const { subQuestions, id, ...questionData } = question;    
@@ -39,6 +61,11 @@ router.post('/new', async (req, res) => {
     }
     createdExam.questions = questionIds;
     await createdExam.save();
+
+    // Check if the new exam is set as default, and if so, change all other defaults to false.
+    if (createdExam.default) {
+      await examModel.updateMany({ default: true, _id: { $ne: createdExam._id } }, { $set: { default: false } });
+    }
     res.status(201).json(createdExam);
   } catch (error) {
     console.error("Error creating new exam or adding questions:", error);
@@ -48,9 +75,6 @@ router.post('/new', async (req, res) => {
 
 router.patch('/register/:id', async (req, res) => {
   try {
-    console.log(req.params.id);
-    console.log(req.body.email);
-
     const exam = await examModel.findById(req.params.id);
 
     if (!exam) {
@@ -76,7 +100,6 @@ router.patch('/register/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
       const deletedExam = await examModel.findByIdAndDelete(req.params.id);
-      console.log(deletedExam);
       if (deletedExam) {
         res.status(200).json(deletedExam);
       } else {

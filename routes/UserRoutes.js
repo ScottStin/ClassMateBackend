@@ -6,6 +6,7 @@ const upload = multer({ storage });
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
 
+const examModel = require('../models/exam-model');
 const userModel = require('../models/user-models');
 
 /**
@@ -36,7 +37,28 @@ router.post('/', async (req, res) => {
     const newUser = await new userModel(req.body);
     newUser.hashedPassword = hashedPassword;
     const createdUser = await newUser.save();
+    if (createdUser) {
+      try {
+        const exam = await examModel.findOne({ default: true });
+        if (!exam) {
+          return res.status(404).json('Default exam not found');
+        }
+    
+        const userEmail = createdUser.email;
+    
+        if (exam.studentsEnrolled.includes(userEmail)) {
+          return res.status(400).json('User has already signed up for this exam');
+        }
+    
+        exam.studentsEnrolled.push(userEmail);
+        await exam.save();
+      } catch (error) {
+        res.status(500).send("Internal Server Error");
+      }
     res.status(201).json(createdUser);
+    } else {
+      res.status(500).send("Internal Server Error");
+    }
   } catch (error) {
     console.error("Error creating user:", error);
     res.status(500).send("Internal Server Error");
@@ -60,8 +82,6 @@ router.patch('/:id', async (req, res) => {
     if (!updatedUser) {
       return res.status(404).send('User not found');
     }
-
-    console.log('Updated User:', updatedUser);
     res.status(201).json(updatedUser);
   } catch (error) {
     console.error('Error updating user:', error);
@@ -84,8 +104,6 @@ router.delete('/:id', async (req, res) => {
     if (!deletedUser) {
       return res.status(404).send('User not found');
     }
-
-    console.log('Deleted User:', deletedUser);
     res.status(201).json(deletedUser);
   } catch (error) {
     console.error('Error deleting user:', error);
