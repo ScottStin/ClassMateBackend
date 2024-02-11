@@ -73,14 +73,24 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
+    // Exclude the profilepicture property from the update
+    const { profilePicture, ...updatedFields } = req.body;
+  
     const updatedUser = await userModel.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updatedFields },
       { new: true }
     );
 
     if (!updatedUser) {
       return res.status(404).send('User not found');
+    }
+    if(profilePicture) {
+      const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder:'Class E'}, async (err, result)=>{
+        if (err) return console.log(err);        
+        updatedUser.profilePicture = {url:result.url, filename:result.public_id};
+        await updatedUser.save();      
+      })
     }
     res.status(201).json(updatedUser);
   } catch (error) {
