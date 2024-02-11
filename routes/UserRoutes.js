@@ -89,7 +89,13 @@ router.patch('/:id', async (req, res) => {
       const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder:'Class E'}, async (err, result)=>{
         if (err) return console.log(err);        
         updatedUser.profilePicture = {url:result.url, filename:result.public_id};
-        await updatedUser.save();      
+        await updatedUser.save();
+        if (image && req.body.previousProfilePicture) {
+          const { filename } = req.body.previousProfilePicture;
+          await cloudinary.uploader.destroy(filename, (err, result) => {
+            if (err) console.log('Error deleting previous profile picture:', err);
+          });
+        }
       })
     }
     res.status(201).json(updatedUser);
@@ -114,6 +120,15 @@ router.delete('/:id', async (req, res) => {
     if (!deletedUser) {
       return res.status(404).send('User not found');
     }
+    
+    // Remove profile picture:
+    if(deletedUser.profilePicture) {
+      const { filename } = deletedUser.profilePicture;
+      await cloudinary.uploader.destroy(filename, (err, result) => {
+        if (err) console.log('Error deleting profile picture:', err);
+      });
+    }
+
     res.status(201).json(deletedUser);
   } catch (error) {
     console.error('Error deleting user:', error);
