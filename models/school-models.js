@@ -29,10 +29,10 @@ const schoolSchema = mongoose.Schema({
         shadow:String
     },
     primaryButtonBackgroundColor:{
-        String
+        type: String,
     },
     primaryButtonTextColor:{
-        String
+        type: String,
     },
     lessonTypes: [
         {
