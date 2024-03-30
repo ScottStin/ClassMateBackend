@@ -7,7 +7,7 @@ const userSchema = mongoose.Schema({
     userType:{
         type: String,
     },
-    school:{
+    schoolId:{
         type: String,
     },
     nationality:{

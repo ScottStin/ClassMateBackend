@@ -17,7 +17,6 @@ router.get('/', async function (req, res) {
 router.post('/new', async (req, res) => {
   try {
     const createdLesson = await lessonModel.insertMany(req.body);
-    console.log(createdLesson);
     res.status(201).json(createdLesson);
   } catch (error) {
     console.error("Error creating new lessons:", error);
@@ -96,8 +95,6 @@ router.patch('/cancel/:id', async (req, res) => {
     if (!lesson.studentsEnrolled.includes(userEmail)) {
       return res.status(400).json('User is not currently enrolled in this lesson');
     }
-    console.log(userEmail);
-    console.log(lesson.studentsEnrolled);
     index = lesson.studentsEnrolled.indexOf(userEmail);
     if (index > -1) {
       lesson.studentsEnrolled.splice(index, 1);
@@ -114,7 +111,6 @@ router.patch('/cancel/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const deletedLesson = await lessonModel.findByIdAndDelete(req.params.id);
-    console.log(deletedLesson);
     if (deletedLesson) {
       res.status(200).json(deletedLesson);
     } else {

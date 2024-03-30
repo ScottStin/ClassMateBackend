@@ -6,7 +6,7 @@ const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 
 const schoolModel = require('../models/school-models');
-
+const userModel = require('../models/user-models');
 /**
  * ==============================
  *  Get all schools:
@@ -16,7 +16,6 @@ const schoolModel = require('../models/school-models');
 router.get('/', async (req, res) => {
   try {
     const schools = await schoolModel.find();
-    console.log(schools);
     res.json(schools);
   } catch (error) {
     console.error("Error getting schools:", error);
@@ -31,7 +30,6 @@ router.get('/', async (req, res) => {
 */
 
 router.post('/', async (req, res) => {
-  console.log(req.body);
   try {
     // Check if a school with the provided name already exists
     const existingSchoolName = await schoolModel.findOne({ name: { $regex: new RegExp("^" + req.body.name, "i") } });
@@ -63,7 +61,29 @@ router.post('/', async (req, res) => {
     }
 
     if (createdSchool) {
-      res.status(201).json(createdSchool);
+
+        // Create a new user
+        const userDetails = {
+          name: req.body.name,
+          userType: 'school',
+          schoolId: createdSchool._id,
+          email: req.body.email,
+          hashedPassword: hashedPassword,
+          profilePicture: newSchool.logo ? newSchool.logo : null 
+        }
+        const newUser = await new userModel(userDetails);
+        const createdUser = await newUser.save();
+  
+        // Ensure user is created before proceeding
+        if (!createdUser) {
+          await createdSchool.remove(); // Rollback: delete the school
+          
+          console.log('school deleted');
+          return res.status(500).send("Internal Server Error");
+        }
+  
+        console.log(newUser);  
+        res.status(201).json(createdUser);
     } else {
       res.status(500).send("Internal Server Error");
     }

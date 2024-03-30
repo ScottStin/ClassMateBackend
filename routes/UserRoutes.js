@@ -17,7 +17,19 @@ const userModel = require('../models/user-models');
 
 router.get('/', async (req, res) => {
   try {
-    const users = await userModel.find();
+    // Extract the currentSchoolId from the query parameters
+    const currentSchoolId = req.query.currentSchoolId;
+
+    // If currentSchoolId is provided, filter users by schoolId
+    let filter = {};
+    if (currentSchoolId) {
+      filter = { schoolId: currentSchoolId };
+    }
+
+    // Find users based on the filter
+    const users = await userModel.find(filter);
+
+    // Send the filtered users as the response
     res.json(users);
   } catch (error) {
     console.error("Error getting users:", error);
@@ -73,6 +85,7 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
+    console.log(req.body)
     // Exclude the profilepicture property from the update
     const { profilePicture, ...updatedFields } = req.body;
   

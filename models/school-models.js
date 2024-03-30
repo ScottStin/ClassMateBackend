@@ -26,7 +26,8 @@ const schoolSchema = mongoose.Schema({
     backgroundImage: {
         name:String,
         label:String,
-        shadow:String
+        shadow:String,
+        type: { type: String, default: null },
     },
     primaryButtonBackgroundColor:{
         type: String,

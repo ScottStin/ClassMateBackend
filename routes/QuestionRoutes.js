@@ -6,7 +6,6 @@ const examModel = require("../models/exam-model");
 
 router.get('/', async function (req, res) {
     try {
-        console.log('hit questions')
         await questionModel.find()
         .then(questions => {res.json(questions)})
         .catch(err => res.status(400).json('Error: ' + err));
@@ -31,10 +30,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
             }
 
             if(foundQuestion.type.toLowerCase() === 'section' && foundQuestion.subQuestions?.length >0){
-                console.log('subQuestions:');
-                console.log(foundQuestion.subQuestions);
                 for(const subQuestionId of foundQuestion.subQuestions) {
-                    console.log(subQuestionId.toString())
                     const foundSubQuestion = await questionModel.findById(subQuestionId.toString());
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
                     const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.student === userEmail)
@@ -95,10 +91,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
             }
 
             if(foundQuestion.type.toLowerCase() === 'section' && foundQuestion.subQuestions?.length >0){
-                console.log('subQuestions:');
-                console.log(foundQuestion.subQuestions);
                 for(const subQuestionId of foundQuestion.subQuestions) {
-                    console.log(subQuestionId.toString())
                     const foundSubQuestion = await questionModel.findById(subQuestionId.toString());
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
                     const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.student === studentEmail)
@@ -122,9 +115,6 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                         if(foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.feedback !== undefined) {
                             foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail).feedback = submittedSubQuestionStudentResponse.feedback ?? null;
                         }
-
-                        console.log('foundSubQuestion')
-                        console.log(foundSubQuestion)
                         await foundSubQuestion.save();
                         // } 
                     }
@@ -132,11 +122,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                 
             } else {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)
-                console.log('submittedQuestion')
-                console.log(submittedQuestion)
                 const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.student === studentEmail)
-                console.log('submittedStudentResponse')
-                console.log(submittedStudentResponse)
 
                 if(submittedStudentResponse){
                     // Set studentResponse to an empty array if it's undefined
@@ -158,8 +144,6 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                     }
                     // foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.mark =  submittedStudentResponse.mark ?? null;
                     // foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.feedback =  submittedStudentResponse.feedback ?? null;
-                    console.log('foundQuestion')
-                    console.log(foundQuestion)
                     await foundQuestion.save();
                     // } 
                 }
