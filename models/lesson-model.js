@@ -7,6 +7,9 @@ const lessonSchema = mongoose.Schema({
     name:{
         type: String,
     },
+    schoolId:{
+        type: String,
+    },
     description:{
         type: String,
     },

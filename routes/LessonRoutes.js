@@ -5,9 +5,20 @@ const lessonModel = require('../models/lesson-model');
 
 router.get('/', async function (req, res) {
     try {
-        await lessonModel.find()
-        .then(lessons => {res.json(lessons)})
-        .catch(err => res.status(400).json('Error: ' + err));
+        // Extract the currentSchoolId from the query parameters
+        const currentSchoolId = req.query.currentSchoolId;
+
+        // If currentSchoolId is provided, filter lessons by schoolId
+        let filter = {};
+        if (currentSchoolId) {
+          filter = { schoolId: currentSchoolId };
+        }
+
+        // Find lessons based on the filter
+        const lessons = await lessonModel.find(filter);
+
+        // Send the filtered lessons as the response
+        res.json(lessons);
     } catch (error) {
         console.error("Error getting lessons:", error);
         res.status(500).send("Internal Server Error");

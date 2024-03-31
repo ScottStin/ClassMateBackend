@@ -157,10 +157,14 @@ router.delete('/:id', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const user = await userModel.findOne({ email: req.body.email });
-    const validPassword = await bcrypt.compare(req.body.unhashedPassword, user.hashedPassword);
 
-    if (!user || !validPassword) {
+    const user = await userModel.findOne({ email: req.body.user.email, schoolId: req.body.currentSchoolId });
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication failed. Invalid email or password.' });
+    }
+
+    const validPassword = await bcrypt.compare(req.body.user.unhashedPassword, user.hashedPassword);
+    if (!validPassword) {
       return res.status(401).json({ error: 'Authentication failed. Invalid email or password.' });
     }
 
