@@ -13,6 +13,9 @@ const schoolSchema = mongoose.Schema({
     phone:{
         type: String,
     },
+    address:{
+        type: String,
+    },
     hashedPassword:{
         type: String,
     },
@@ -38,7 +41,7 @@ const schoolSchema = mongoose.Schema({
     lessonTypes: [
         {
             name: String,
-            shortName: String
+            shortName: String,
         }
     ]
 }, {

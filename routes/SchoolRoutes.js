@@ -93,4 +93,82 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * ==============================
+ *  Update School:
+ * ==============================
+*/
+
+router.patch('/:id', async (req, res) => {
+  try {
+    // Constructing an object with only the fields that need to be updated
+    const updateFields = {};
+    for (const key in req.body) {
+      if (req.body.hasOwnProperty(key)) {
+        updateFields[key] = req.body[key];
+      }
+    }
+
+    const updatedSchool = await schoolModel.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateFields },
+      { new: true }
+    );
+
+    if (updatedSchool) {
+      const schoolAdminUser = await userModel.findOne({ schoolId: req.params.id, userType: 'school' });
+
+      // Update user details
+      if (schoolAdminUser) {
+        const updatedUser = await userModel.findByIdAndUpdate(
+          schoolAdminUser._id,
+          {
+            $set: {
+              name: req.body.name,
+              email: req.body.email,
+              profilePicture: updatedSchool.logo ? updatedSchool.logo : null
+            }
+          },
+          { new: true }
+        );
+
+        console.log(updatedUser);
+        res.status(201).json({school: updatedSchool, user: updatedUser});
+      } else {
+        res.status(404).send('School admin user not found');
+      }
+    } else {
+      res.status(404).send('School not found');
+    }
+  } catch (error) {
+    console.error('Error updating school:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * ==============================
+ *  Delete School:
+ * ==============================
+*/
+
+router.delete('/:id', async (req, res) => {
+  try {
+    console.log(req);
+    const deleteSchool = await schoolModel.findByIdAndDelete(
+      req.params.id,
+    );
+    console.log(deleteSchool);
+
+    if (!deleteSchool) {
+      return res.status(404).send('School not found');
+    }
+
+    res.status(201).json(deleteSchool);
+  } catch (error) {
+    console.error('Error deleting school:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 module.exports = router;
