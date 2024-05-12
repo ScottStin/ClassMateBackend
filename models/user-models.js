@@ -24,7 +24,7 @@ const userSchema = mongoose.Schema({
     },
     profilePicture:{
         url:String,
-        filename:String
+        fileName:String
     },
     package:{
         type: String,
