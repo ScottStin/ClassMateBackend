@@ -56,12 +56,17 @@ router.post('/new-comment', async (req, res) => {
     updatedHomework.comments.push(newComment);
     await updatedHomework.save();
   
-    console.log('updatedHomework:');
-    console.log(updatedHomework);
-
     if (!updatedHomework) {
       return res.status(404).json({ error: 'Homework not found' });
     }
+
+    if (newComment.pass === true) {
+      const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.student);
+      if (studentIndex !== -1) {
+        updatedHomework.students[studentIndex].completed = true;
+      }
+    }
+    await updatedHomework.save();
 
     res.status(201).json(updatedHomework);
   } catch (error) {

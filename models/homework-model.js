@@ -14,7 +14,10 @@ const homeworkSchema = mongoose.Schema({
         type: String,
     },
     students:[
-        { type: String }
+        {
+            studentId:String,
+            completed:Boolean
+        },
     ],
     duration:{
         type: Number,
@@ -26,6 +29,12 @@ const homeworkSchema = mongoose.Schema({
     schoolId:{
         type: String,
     },
+    attempts:{
+        type: Number,
+    },
+    // completed:{
+    //     type: Boolean,
+    // },
     comments:[
         {
             teacher: String,
