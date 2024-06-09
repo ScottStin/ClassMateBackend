@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const homeworkSchema = mongoose.Schema({
+    id:{
+        type: String,
+    },
     name:{
         type: String,
     },
@@ -37,6 +40,7 @@ const homeworkSchema = mongoose.Schema({
     // },
     comments:[
         {
+            id: String,
             teacher: String,
             student: String,
             date: String,
