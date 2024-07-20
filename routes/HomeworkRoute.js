@@ -104,7 +104,7 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * ==============================
- *  Comments (to do, move comments to their own service and create dedicated comment model/route in backend)
+ *  Comments (TODO - move comments to their own service and create dedicated comment model/route in backend)
  * ==============================
  */
 
@@ -113,6 +113,9 @@ router.post('/new-comment', async (req, res) => {
   try {
     const homeworkId = req.body.homeworkId;
     const newComment = req.body.feedback;
+    newComment.createdAt = new Date();
+    console.log(newComment);
+    console.log(req.body.schoolId);
       
     const updatedHomework = await homeworkModel.findById(homeworkId);
 
@@ -123,6 +126,7 @@ router.post('/new-comment', async (req, res) => {
       return res.status(404).json({ error: 'Homework not found' });
     }
 
+    // --- set student.completed to true from this homework item if the student passed this submission attempt:
     if (newComment.pass === true) {
       const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.student);
       if (studentIndex !== -1) {
@@ -130,6 +134,16 @@ router.post('/new-comment', async (req, res) => {
       }
     }
     await updatedHomework.save();
+
+    // --- upload attachment:
+    if (newComment.attachment && newComment.attachment?.url && newComment.attachment?.url !== '' && newComment.attachment?.fileName !== '' && req.body.schoolId) {
+      const lastIndex = updatedHomework.comments.length - 1;
+      const attachment = await cloudinary.uploader.upload(newComment.attachment.url, { folder: `${req.body.schoolId}/homework-comment-attachments` });
+      updatedHomework.comments[lastIndex].attachment = { url: attachment.url, fileName: attachment.public_id };
+      await updatedHomework.save();
+      console.log('updatedHomework.comments[lastIndex].attachment')
+      console.log(updatedHomework.comments[lastIndex])
+    }
 
     res.status(201).json(updatedHomework);
   } catch (error) {

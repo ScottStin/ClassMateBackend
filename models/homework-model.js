@@ -47,12 +47,16 @@ const homeworkSchema = mongoose.Schema({
             duration: Number,
             commentType: String, // 'feedback' | 'submission',
             text: String,
-            attachement: {
+            attachment: {
                 url:String,
                 fileName:String
             },
             pass: Boolean,
-        }
+            createdAt: {
+                type: Date,
+                default: Date.now
+            },
+        },
     ],
 }, {
     timestamps: true
