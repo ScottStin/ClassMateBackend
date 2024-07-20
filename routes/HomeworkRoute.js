@@ -53,6 +53,41 @@ router.post('/', async (req, res) => {
 });
 
 
+router.patch('/:id', async (req, res) => {
+  try {
+    const unModifiedHomework = await homeworkModel.findById(req.params.id);
+
+    if (!unModifiedHomework) {
+      return res.status(404).json({ message: "Homework not found" });
+    }
+
+    const updatedHomework = await homeworkModel.findByIdAndUpdate(
+      req.params.id, 
+      req.body, 
+      { new: true }
+    );
+    if (updatedHomework) {
+      res.status(200).json(updatedHomework);
+
+      // --- remove comments from removed students
+      const currentStudentList = unModifiedHomework.students.map(student => student.studentId.toString());
+      const newStudentList = req.body.students.map(student => student.studentId.toString());
+      const removedStudents = currentStudentList.filter(studentId => !newStudentList.includes(studentId));
+      
+      if (removedStudents.length > 0) {
+        updatedHomework.comments = updatedHomework.comments.filter(comment => !removedStudents.includes(comment.student.toString()));
+        await updatedHomework.save();
+      }
+
+    } else {
+      res.status(404).json({ message: "Homework not found" });
+    }
+  } catch (error) {
+    console.error("Error updating Homework:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const deletedHomework = await homeworkModel.findByIdAndDelete(req.params.id);
