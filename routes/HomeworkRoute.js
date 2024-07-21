@@ -39,19 +39,19 @@ router.post('/', async (req, res) => {
     const newHomework = await new homeworkModel(req.body);
     const createdHomework = await newHomework.save();
 
+    //--- upload attachment:
     if (createdHomework && req.body.attachment && req.body.attachment?.url && req.body.attachment?.url !== '' && req.body.attachment?.fileName !== '') {
         const attachment = await cloudinary.uploader.upload(req.body.attachment.url, { folder: `${req.body.schoolId}/homework-attachments` });
         createdHomework.attachment = { url: attachment.url, fileName: attachment.public_id };
         await createdHomework.save();
     }
-    
+
     res.status(201).json(createdHomework);
   } catch (error) {
     console.error("Error creating new homework:", error);
     res.status(500).send("Internal Server Error");
   }
 });
-
 
 router.patch('/:id', async (req, res) => {
   try {
@@ -66,6 +66,22 @@ router.patch('/:id', async (req, res) => {
       req.body, 
       { new: true }
     );
+
+    //--- upload attachment:
+    if (updatedHomework && req.body.attachment && req.body.attachment?.url && req.body.attachment?.url !== '' && req.body.attachment?.fileName !== '') {
+      const attachment = await cloudinary.uploader.upload(req.body.attachment.url, { folder: `${req.body.schoolId}/homework-attachments` });
+      updatedHomework.attachment = { url: attachment.url, fileName: attachment.public_id };
+      await updatedHomework.save();
+
+      //--- delete previous attachment:
+      if (attachment) {
+        const { fileName } = unModifiedHomework.attachment;
+        await cloudinary.uploader.destroy(fileName, (err, result) => {
+          if (err) console.log('Error deleting previous attachment:', err);
+        });
+      }
+    }
+
     if (updatedHomework) {
       res.status(200).json(updatedHomework);
 
@@ -92,6 +108,15 @@ router.delete('/:id', async (req, res) => {
   try {
     const deletedHomework = await homeworkModel.findByIdAndDelete(req.params.id);
     if (deletedHomework) {
+
+      // --- delete homework attachment:
+      if(deletedHomework.attachment) {
+        const { fileName } = deletedHomework.attachment;
+        await cloudinary.uploader.destroy(fileName, (err, result) => {
+          if (err) console.log('Error deleting homework attachment:', err);
+        });
+      }
+
       res.status(200).json(deletedHomework);
     } else {
       res.status(404).json({ message: "Homework not found" });
@@ -114,8 +139,6 @@ router.post('/new-comment', async (req, res) => {
     const homeworkId = req.body.homeworkId;
     const newComment = req.body.feedback;
     newComment.createdAt = new Date();
-    console.log(newComment);
-    console.log(req.body.schoolId);
       
     const updatedHomework = await homeworkModel.findById(homeworkId);
 
@@ -141,8 +164,6 @@ router.post('/new-comment', async (req, res) => {
       const attachment = await cloudinary.uploader.upload(newComment.attachment.url, { folder: `${req.body.schoolId}/homework-comment-attachments` });
       updatedHomework.comments[lastIndex].attachment = { url: attachment.url, fileName: attachment.public_id };
       await updatedHomework.save();
-      console.log('updatedHomework.comments[lastIndex].attachment')
-      console.log(updatedHomework.comments[lastIndex])
     }
 
     res.status(201).json(updatedHomework);
@@ -250,6 +271,14 @@ router.post('/delete-comment', async (req, res) => {
     if (studentIndex !== -1 && commentToDelete.commentType.toLowerCase() === 'feedback') {
       updatedHomework.students[studentIndex].completed = false;
       await updatedHomework.save();
+    }
+
+    // Remove comment attachment:
+    if(commentToDelete.attachment) {
+      const { fileName } = commentToDelete.attachment;
+      await cloudinary.uploader.destroy(fileName, (err, result) => {
+        if (err) console.log('Error deleting comment attachment:', err);
+      });
     }
 
     res.status(201).json(updatedHomework);

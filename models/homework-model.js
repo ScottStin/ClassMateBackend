@@ -27,7 +27,7 @@ const homeworkSchema = mongoose.Schema({
     },
     attachment: {
         url:String,
-        filename:String
+        fileName:String
     },
     schoolId:{
         type: String,

@@ -45,12 +45,17 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+
+    // --- hash password and create new user:
     const hashedPassword = await bcrypt.hash(req.body.unhashedPassword, 12)
     const newUser = await new userModel(req.body);
     newUser.hashedPassword = hashedPassword;
     const createdUser = await newUser.save();
+    
     if (createdUser) {
       try {
+
+        // --- enroll new users in default exam:
         const exam = await examModel.findOne({ default: true });
         if (!exam) {
           return res.status(404).json('Default exam not found');
@@ -64,6 +69,15 @@ router.post('/', async (req, res) => {
     
         exam.studentsEnrolled.push(userEmail);
         await exam.save();
+
+        // --- upload user photo to cloudinary:
+        if(newUser.profilePicture) {
+          await cloudinary.uploader.upload(newUser.profilePicture.url, {folder: `${newUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
+            if (err) return console.log(err);  
+            newUser.profilePicture = {url:result.url, fileName:result.public_id};
+            await newUser.save();
+          })
+        }
       } catch (error) {
         res.status(500).send("Internal Server Error");
       }
@@ -85,7 +99,6 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
-    console.log(req.body)
     // Exclude the profilepicture property from the update
     const { profilePicture, ...updatedFields } = req.body;
   
@@ -99,13 +112,13 @@ router.patch('/:id', async (req, res) => {
       return res.status(404).send('User not found');
     }
     if(profilePicture) {
-      const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder:'Class E'}, async (err, result)=>{
+      const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder: `${updatedUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
         if (err) return console.log(err);        
-        updatedUser.profilePicture = {url:result.url, filename:result.public_id};
+        updatedUser.profilePicture = {url:result.url, fileName:result.public_id};
         await updatedUser.save();
         if (image && req.body.previousProfilePicture) {
-          const { filename } = req.body.previousProfilePicture;
-          await cloudinary.uploader.destroy(filename, (err, result) => {
+          const { fileName } = req.body.previousProfilePicture;
+          await cloudinary.uploader.destroy(fileName, (err, result) => {
             if (err) console.log('Error deleting previous profile picture:', err);
           });
         }
@@ -136,8 +149,8 @@ router.delete('/:id', async (req, res) => {
     
     // Remove profile picture:
     if(deletedUser.profilePicture) {
-      const { filename } = deletedUser.profilePicture;
-      await cloudinary.uploader.destroy(filename, (err, result) => {
+      const { fileName } = deletedUser.profilePicture;
+      await cloudinary.uploader.destroy(fileName, (err, result) => {
         if (err) console.log('Error deleting profile picture:', err);
       });
     }
