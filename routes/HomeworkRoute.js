@@ -104,8 +104,39 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+router.delete('/remove-student', async (req, res) => {
+  try {
+    const { studentId, homeworkItemId } = req.query;
+
+    // Validate input
+    if (!studentId || !homeworkItemId) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+
+    // Find the homework item by ID
+    const homeworkItem = await homeworkModel.findById(homeworkItemId);
+    if (!homeworkItem) {
+      return res.status(404).json({ message: 'Homework item not found' });
+    }
+
+    // Remove the student from the homework item students list
+    homeworkItem.students = homeworkItem.students.filter((student) => student.studentId !== studentId);
+
+    // Correctly filter out comments by the student
+    homeworkItem.comments = homeworkItem.comments.filter((comment) => comment.student.toString() !== studentId);
+
+    await homeworkItem.save();
+
+    res.status(200).json(homeworkItem);
+  } catch (error) {
+    console.error("Error removing student from Homework:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
+    console.log('hit 1')
     const deletedHomework = await homeworkModel.findByIdAndDelete(req.params.id);
     if (deletedHomework) {
 
