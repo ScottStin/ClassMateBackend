@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const fetch = require('node-fetch');
 
 const lessonModel = require('../models/lesson-model');
 
@@ -89,6 +90,72 @@ router.patch('/register-multi/:id', async (req, res) => {
     res.json(`Students added to: ${lesson}`);
   } catch (error) {
     console.error("Error join lessons:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/start-lesson/:id', async (req, res) => {
+  try {
+    const lesson = await lessonModel.findById(req.params.id);
+
+    if (!lesson) {
+      return res.status(404).json('Lesson not found');
+    }
+    const { startTime, duration } = req.body; // Extract startTime and duration from request body
+
+    // Manually parse the startTime without adjusting for time zone
+    const [datePart, timePart] = startTime.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hour, minute] = timePart.split(':').map(Number);
+    
+    // Create a Date object using the local time components (this avoids timezone adjustments)
+    const start = new Date(year, month - 1, day, hour, minute);
+    
+    // Calculate not_before and expires_at
+    const notBefore = new Date(start.getTime() - (5 * 60000)); // 5 min before lesson starts
+    const expiresAt = new Date(start.getTime() + (duration * 60000) + (15 * 60000)); // Duration + 15 min after lesson ends
+    
+    console.log(req.body._id);
+    // Room properties for the lesson
+    const roomProperties = {
+      enable_chat: true,
+      max_participants: 10,
+      enable_breakout_rooms: true,
+      enable_screenshare: true,
+      enable_people_ui: true,
+      nbf: Math.floor(notBefore.getTime() / 1000), // Convert to seconds
+      exp: Math.floor(expiresAt.getTime() / 1000), // Convert to seconds
+    };
+
+    // Create the room in Daily.co
+    const roomResponse = await fetch('https://api.daily.co/v1/rooms', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer 122fa2723fc0ca4355d9f10795f52462d285fcb15c5ef20160f3b04ff8b9a726` // Replace with your actual API key
+      },
+      body: JSON.stringify({
+        name: req.body._id,
+        properties: roomProperties,
+      })
+    });
+
+    // Handle the response
+    const roomData = await roomResponse.json();
+
+
+    if (!roomResponse.ok) {
+      console.log(roomData);
+      throw new Error('Failed to create room: ' + roomData.message);
+    }
+
+    // Start lesson
+    lesson.status = 'started';
+    await lesson.save();
+
+    res.json(`Lesson started`);
+  } catch (error) {
+    console.error("Error starting lesson:", error);
     res.status(500).send("Internal Server Error");
   }
 });

@@ -69,7 +69,7 @@ const lessonSchema = mongoose.Schema({
         type:Number
     },
     status:{
-        type:String
+        type:String // started, finished
     },
     restricted:{
         type:Boolean
