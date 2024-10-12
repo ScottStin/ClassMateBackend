@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const fetch = require('node-fetch');
+const { getIo } = require('../socket-io'); // Import the getIo function
 
 const lessonModel = require('../models/lesson-model');
 
@@ -28,8 +29,14 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
-    const createdLesson = await lessonModel.insertMany(req.body);
-    res.status(201).json(createdLesson);
+    const createdLessons = await lessonModel.insertMany(req.body);
+    res.status(201).json(createdLessons);
+  
+    // Emit event to all connected clients after lesson is created
+    if(req.body[0].schoolId) {
+      const io = getIo(); // Safely get the initialized Socket.IO instance
+      io.emit('lessonCreated-' + req.body[0].schoolId, createdLessons);
+    }
   } catch (error) {
     console.error("Error creating new lessons:", error);
     res.status(500).send("Internal Server Error");
@@ -58,6 +65,12 @@ router.patch('/register/:id', async (req, res) => {
     await lesson.save();
 
     res.json(`Student added to: ${lesson}`);
+
+    // Emit event to all connected clients after lesson is updated
+    if(lesson.schoolId) {
+      const io = getIo(); // Safely get the initialized Socket.IO instance
+      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+    }
   } catch (error) {
     console.error("Error join lessons:", error);
     res.status(500).send("Internal Server Error");
@@ -88,6 +101,12 @@ router.patch('/register-multi/:id', async (req, res) => {
     await lesson.save();
 
     res.json(`Students added to: ${lesson}`);
+
+    // Emit event to all connected clients after lesson is updated
+    if(lesson.schoolId) {
+      const io = getIo(); // Safely get the initialized Socket.IO instance
+      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+    }
   } catch (error) {
     console.error("Error join lessons:", error);
     res.status(500).send("Internal Server Error");
@@ -114,8 +133,7 @@ router.patch('/start-lesson/:id', async (req, res) => {
     // Calculate not_before and expires_at
     const notBefore = new Date(start.getTime() - (5 * 60000)); // 5 min before lesson starts
     const expiresAt = new Date(start.getTime() + (duration * 60000) + (15 * 60000)); // Duration + 15 min after lesson ends
-    
-    console.log(req.body._id);
+
     // Room properties for the lesson
     const roomProperties = {
       enable_chat: true,
@@ -152,8 +170,13 @@ router.patch('/start-lesson/:id', async (req, res) => {
     // Start lesson
     lesson.status = 'started';
     await lesson.save();
-
     res.json(`Lesson started`);
+
+    // Emit event to all connected clients after lesson is updated
+    if(lesson.schoolId) {
+      const io = getIo(); // Safely get the initialized Socket.IO instance
+      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+    }
   } catch (error) {
     console.error("Error starting lesson:", error);
     res.status(500).send("Internal Server Error");
@@ -180,6 +203,13 @@ router.patch('/cancel/:id', async (req, res) => {
     await lesson.save();
 
     res.json(`Student removed from: ${lesson}`);
+
+    // Emit event to all connected clients after lesson is updated
+    if(lesson.schoolId) {
+      const io = getIo(); // Safely get the initialized Socket.IO instance
+      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+    }
+
   } catch (error) {
     console.error("Error leaving lessons:", error);
     res.status(500).send("Internal Server Error");
@@ -191,6 +221,10 @@ router.delete('/:id', async (req, res) => {
     const deletedLesson = await lessonModel.findByIdAndDelete(req.params.id);
     if (deletedLesson) {
       res.status(200).json(deletedLesson);
+
+      // Emit event to all connected clients after lesson is deleted
+      const io = getIo();
+      io.emit('lessonDeleted-' + deletedLesson.schoolId, deletedLesson);
     } else {
       res.status(404).json({ message: "Lesson not found" });
     }

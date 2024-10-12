@@ -64,7 +64,11 @@ const cors = require('cors');
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-app.use(cors({ origin: 'http://localhost:4200' }));
+app.use(cors({
+  origin: 'http://localhost:4200',
+  methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+  credentials: true,
+}));
 // app.use(express.json());
 
 connectDB();
@@ -179,13 +183,36 @@ app.set('src', path.join(__dirname, '../src')); // this, along with the 'require
 
 /**
  * ==============================
+ *  SOCKET CONNECTION (used for live data updated)
+ * ==============================
+*/
+
+const http = require('http'); 
+const server = http.createServer(app); // Create server for Express & Socket.IO
+const { initSocketIo } = require('./socket-io'); // Import socket initializer
+
+// Initialize Socket.IO with the server
+initSocketIo(server);
+
+/**
+ * ==============================
  *  LISTENING
  * ==============================
 */
 
+// Test route to check server connectivity
+app.get('/', function (req, res) {
+  res.send({ express: 'YOUR EXPRESS BACKEND IS CONNECTED TO ANGULAR FRONTEND' });
+});
 
-app.listen(PORT, console.log(`Your app is running on port ${PORT}`));
+// Start the server using server.listen, no need for app.listen
+server.listen(PORT, () => {
+  console.log(`Your app is running on port ${PORT}`);
+});
 
-app.get('/',function(req,res){
-    res.send({ express: 'YOUR EXPRESS BACKEND IS CONNECTED TO ANGULAR FRONTEND' })
-})
+
+// app.listen(PORT, console.log(`Your app is running on port ${PORT}`));
+
+// app.get('/',function(req,res){
+//     res.send({ express: 'YOUR EXPRESS BACKEND IS CONNECTED TO ANGULAR FRONTEND' })
+// })
