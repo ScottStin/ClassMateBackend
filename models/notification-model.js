@@ -7,7 +7,7 @@ const notificationSchema = mongoose.Schema({
     schoolId:{
         type: String,
     },
-    createBy:{
+    createdBy:{
         type: String,
     },
     message:{
