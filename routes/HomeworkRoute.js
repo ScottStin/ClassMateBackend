@@ -91,7 +91,7 @@ router.patch('/:id', async (req, res) => {
       const removedStudents = currentStudentList.filter(studentId => !newStudentList.includes(studentId));
       
       if (removedStudents.length > 0) {
-        updatedHomework.comments = updatedHomework.comments.filter(comment => !removedStudents.includes(comment.student.toString()));
+        updatedHomework.comments = updatedHomework.comments.filter(comment => !removedStudents.includes(comment.studentId.toString()));
         await updatedHomework.save();
       }
 
@@ -123,7 +123,7 @@ router.delete('/remove-student', async (req, res) => {
     homeworkItem.students = homeworkItem.students.filter((student) => student.studentId !== studentId);
 
     // Correctly filter out comments by the student
-    homeworkItem.comments = homeworkItem.comments.filter((comment) => comment.student.toString() !== studentId);
+    homeworkItem.comments = homeworkItem.comments.filter((comment) => comment.studentId.toString() !== studentId);
 
     await homeworkItem.save();
 
@@ -182,7 +182,7 @@ router.post('/new-comment', async (req, res) => {
 
     // --- set student.completed to true from this homework item if the student passed this submission attempt:
     if (newComment.pass === true) {
-      const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.student);
+      const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.studentId);
       if (studentIndex !== -1) {
         updatedHomework.students[studentIndex].completed = true;
       }
@@ -221,8 +221,8 @@ router.post('/update-comment', async (req, res) => {
     filteredComments = comments.filter((comment)=>
       comment.commentType.toLowerCase() === newComment.commentType.toLowerCase() && 
       (
-        (comment.commentType.toLowerCase() === 'submission' && comment.student === newComment.student) || 
-        (comment.commentType.toLowerCase() === 'feedback' && comment.teacher === newComment.teacher)
+        (comment.commentType.toLowerCase() === 'submission' && comment.studentId === newComment.studentId) || 
+        (comment.commentType.toLowerCase() === 'feedback' && comment.teacherId === newComment.teacherId)
       )
     );
     
@@ -245,7 +245,7 @@ router.post('/update-comment', async (req, res) => {
     }
   
     // --- update student 'pass' status in homework item if comment.pass === true
-    const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.student);
+    const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.studentId);
     if (studentIndex !== -1 && newComment.commentType.toLowerCase() === 'feedback') {
       updatedHomework.students[studentIndex].completed = (newComment.pass === true);
       await updatedHomework.save();
@@ -275,8 +275,8 @@ router.post('/delete-comment', async (req, res) => {
     filteredComments = comments.filter((comment)=>
       comment.commentType.toLowerCase() === commentToDelete.commentType.toLowerCase() && 
       (
-        (comment.commentType.toLowerCase() === 'submission' && comment.student === commentToDelete.student) || 
-        (comment.commentType.toLowerCase() === 'feedback' && comment.teacher === commentToDelete.teacher)
+        (comment.commentType.toLowerCase() === 'submission' && comment.studentId === commentToDelete.studentId) || 
+        (comment.commentType.toLowerCase() === 'feedback' && comment.teacherId === commentToDelete.teacherId)
       )
     );
     
@@ -298,7 +298,7 @@ router.post('/delete-comment', async (req, res) => {
     }
   
     // --- update student 'pass' status in homework item
-    const studentIndex = updatedHomework.students.findIndex(student => student.studentId === commentToDelete.student);
+    const studentIndex = updatedHomework.students.findIndex(student => student.studentId === commentToDelete.studentId);
     if (studentIndex !== -1 && commentToDelete.commentType.toLowerCase() === 'feedback') {
       updatedHomework.students[studentIndex].completed = false;
       await updatedHomework.save();

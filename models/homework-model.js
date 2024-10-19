@@ -13,7 +13,7 @@ const homeworkSchema = mongoose.Schema({
     dueDate:{
         type: String,
     },
-    assignedTeacher:{
+    assignedTeacherId:{
         type: String,
     },
     students:[
@@ -41,8 +41,8 @@ const homeworkSchema = mongoose.Schema({
     comments:[
         {
             id: String,
-            teacher: String,
-            student: String,
+            teacherId: String,
+            studentId: String,
             date: String,
             duration: Number,
             commentType: String, // 'feedback' | 'submission',
