@@ -17,7 +17,7 @@ const notificationSchema = mongoose.Schema({
         type: Number,
     },
     recipients:[
-        { type: String }
+        { type: String } // user ids
     ],
     seenBy:[
         { type: String }

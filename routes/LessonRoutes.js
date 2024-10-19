@@ -29,6 +29,7 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
+    console.log(req.body);
     const createdLessons = await lessonModel.insertMany(req.body);
     res.status(201).json(createdLessons);
   
@@ -51,17 +52,17 @@ router.patch('/register/:id', async (req, res) => {
       return res.status(404).json('Lesson not found');
     }
 
-    const userEmail = req.body.email;
+    const userId = req.body._id;
 
-    if (lesson.studentsEnrolled.includes(userEmail)) {
+    if (lesson.studentsEnrolledIds.includes(userId)) {
       return res.status(400).json('User has already registered for this lesson');
     }
 
-    if(lesson.studentsEnrolled.length >= lesson.maxStudents) {
+    if(lesson.studentsEnrolledIds.length >= lesson.maxStudents) {
       return res.status(400).json('Max students in lesson already reached');
     }
 
-    lesson.studentsEnrolled.push(userEmail);
+    lesson.studentsEnrolledIds.push(userId);
     await lesson.save();
 
     res.json(`Student added to: ${lesson}`);
@@ -85,16 +86,16 @@ router.patch('/register-multi/:id', async (req, res) => {
       return res.status(404).json('Lesson not found');
     }
 
-    // Remove students not in req.body from lesson.studentsEnrolled
-    lesson.studentsEnrolled = lesson.studentsEnrolled.filter(
-      (email) => req.body.some((student) => student.email === email)
+    // Remove students not in req.body from lesson.studentsEnrolledIds
+    lesson.studentsEnrolledIds = lesson.studentsEnrolledIds.filter(
+      (id) => req.body.some((student) => student._id === id)
     );
 
-    // Add new students to lesson.studentsEnrolled
+    // Add new students to lesson.studentsEnrolledIds
     for (const student of req.body) {
-      userEmail = student.email
-      if (!lesson.studentsEnrolled.includes(userEmail) && lesson.studentsEnrolled.length < lesson.maxStudents) {
-        lesson.studentsEnrolled.push(userEmail);
+      userId = student._id
+      if (!lesson.studentsEnrolledIds.includes(userId) && lesson.studentsEnrolledIds.length < lesson.maxStudents) {
+        lesson.studentsEnrolledIds.push(userId);
       }
     }
 
@@ -191,14 +192,14 @@ router.patch('/cancel/:id', async (req, res) => {
       return res.status(404).json('Lesson not found');
     }
 
-    const userEmail = req.body.email;
+    const userId = req.body._id;
 
-    if (!lesson.studentsEnrolled.includes(userEmail)) {
+    if (!lesson.studentsEnrolledIds.includes(userId)) {
       return res.status(400).json('User is not currently enrolled in this lesson');
     }
-    index = lesson.studentsEnrolled.indexOf(userEmail);
+    index = lesson.studentsEnrolledIds.indexOf(userId);
     if (index > -1) {
-      lesson.studentsEnrolled.splice(index, 1);
+      lesson.studentsEnrolledIds.splice(index, 1);
     }
     await lesson.save();
 

@@ -25,7 +25,7 @@ const lessonSchema = mongoose.Schema({
     duration: {
         type: Number,
     },
-    teacher: {
+    teacherId: {
         type:String,
     },
     maxStudents: {
@@ -42,26 +42,9 @@ const lessonSchema = mongoose.Schema({
     lessontimeZone: {
         type: String,       
     },
-    studentsEnrolled:[
+    studentsEnrolledIds:[
         { type: String }
     ],
-    // studentsEnrolled: [
-    //     // {
-    //     //     // type: mongoose.Schema.Types.ObjectId, 
-    //     //     type: String,
-    //     //  }
-    //         {
-    //             studentName: {
-    //                 type: String,
-    //             },
-    //             studentEmail: {
-    //                 type: String,
-    //             },
-    //             studentId: {
-    //                 type: String,
-    //             },
-    //         }
-    // ],
     lessonStudentsAttended: [
         {type: String,}
     ],

@@ -10,14 +10,10 @@ router.get('/', async function (req, res) {
         // Extract the currentUserId from the query parameters
         const currentUserId = req.query.currentUserId;
 
-        // TODO - this logic is getting the user id from the email. We should replace this by using the userid instead of the email in the req.body
-        const currentUser = await userModel.findOne({ _id: currentUserId });
-        const currentUserEmail = currentUser.email
-
         // If currentUserId is provided, filter notifications by schoolId
         let filter = {};
         if (currentUserId) {
-            filter = { recipients: { $in: [currentUserEmail] } };
+            filter = { recipients: { $in: [currentUserId] } };
           }
 
         // Find notifications based on the filter
