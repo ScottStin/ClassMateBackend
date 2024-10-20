@@ -3,7 +3,6 @@ const router = express.Router();
 const { getIo } = require('../socket-io'); // Import the getIo function
 
 const notificationsModel = require('../models/notification-model');
-const userModel = require('../models/user-models');
 
 router.get('/', async function (req, res) {
     try {
@@ -36,8 +35,10 @@ router.post('/new', async (req, res) => {
 
     // Emit event to all connected clients after npotification is created
     if(createdNotification.recipients) {
-      const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('notificationCreated-' + createdNotification.recipients[0], createdNotification);
+      for(const recipient of createdNotification.recipients) {
+        const io = getIo(); // Safely get the initialized Socket.IO instance
+        io.emit('notificationCreated-' + recipient, createdNotification);
+      }
     }
   } catch (error) {
     console.error("Error creating new notification:", error);
