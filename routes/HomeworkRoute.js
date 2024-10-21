@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
+const { getIo } = require('../socket-io'); // Import the getIo function
 
 const homeworkModel = require('../models/homework-model');
 
@@ -47,6 +48,14 @@ router.post('/', async (req, res) => {
     }
 
     res.status(201).json(createdHomework);
+
+    // Emit event to all connected clients after homework is created
+    if(createdHomework.students) {
+      for(const student of createdHomework.students) {
+        const io = getIo();
+        io.emit('homeworkCreated-' + student.studentId, createdHomework);
+      }
+    }
   } catch (error) {
     console.error("Error creating new homework:", error);
     res.status(500).send("Internal Server Error");
@@ -198,6 +207,19 @@ router.post('/new-comment', async (req, res) => {
     }
 
     res.status(201).json(updatedHomework);
+
+    // Emit event to all connected clients after comment is created - emit notification of feedback to student
+    if(newComment.commentType === 'feedback' && newComment.studentId) {
+      const io = getIo();
+      io.emit('homeworkCommentCreated-' + newComment.studentId, updatedHomework);
+    }
+
+    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
+    if(newComment.commentType === 'submission' && newComment.teacherId) {
+      const io = getIo();
+      io.emit('homeworkCommentCreated-' + newComment.teacherId, updatedHomework);
+    }
+
   } catch (error) {
     console.error("Error adding comment to homework:", error);
     res.status(500).send("Internal Server Error");
