@@ -145,7 +145,6 @@ router.delete('/remove-student', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    console.log('hit 1')
     const deletedHomework = await homeworkModel.findByIdAndDelete(req.params.id);
     if (deletedHomework) {
 
@@ -335,6 +334,19 @@ router.post('/delete-comment', async (req, res) => {
     }
 
     res.status(201).json(updatedHomework);
+
+    // Emit event to all connected clients after comment is created - emit notification of feedback to student
+    if(commentToDelete.commentType === 'feedback' && commentToDelete.studentId) {
+      const io = getIo();
+      io.emit('homeworkCommentDeleted-' + commentToDelete.studentId, updatedHomework);
+    }
+
+    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
+    if(commentToDelete.commentType === 'submission' && commentToDelete.teacherId) {
+      const io = getIo();
+      io.emit('homeworkCommentDeleted-' + commentToDelete.teacherId, updatedHomework);
+    }
+
   } catch (error) {
     console.error("Error modifying comment on homework:", error);
     res.status(500).send("Internal Server Error");
