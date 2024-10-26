@@ -36,7 +36,8 @@ router.post('/new', async (req, res) => {
     // Emit event to all connected clients after lesson is created
     if(req.body[0].schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonCreated-' + req.body[0].schoolId, createdLessons);
+      // io.emit('lessonCreated-' + req.body[0].schoolId, createdLessons);
+      io.emit('lessonEvent-' +  req.body[0].schoolId, {action: 'lessonCreated', data: createdLessons});
     }
   } catch (error) {
     console.error("Error creating new lessons:", error);
@@ -70,7 +71,8 @@ router.patch('/register/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
     }
   } catch (error) {
     console.error("Error join lessons:", error);
@@ -106,7 +108,8 @@ router.patch('/register-multi/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
     }
   } catch (error) {
     console.error("Error join lessons:", error);
@@ -176,7 +179,8 @@ router.patch('/start-lesson/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
     }
   } catch (error) {
     console.error("Error starting lesson:", error);
@@ -208,7 +212,8 @@ router.patch('/cancel/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
+      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
     }
 
   } catch (error) {
@@ -225,7 +230,8 @@ router.delete('/:id', async (req, res) => {
 
       // Emit event to all connected clients after lesson is deleted
       const io = getIo();
-      io.emit('lessonDeleted-' + deletedLesson.schoolId, deletedLesson);
+      // io.emit('lessonDeleted-' + deletedLesson.schoolId, deletedLesson);
+      io.emit('lessonEvent-' +  deletedLesson.schoolId, {action: 'lessonDeleted', data: deletedLesson});
     } else {
       res.status(404).json({ message: "Lesson not found" });
     }

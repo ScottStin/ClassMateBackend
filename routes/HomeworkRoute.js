@@ -53,7 +53,7 @@ router.post('/', async (req, res) => {
     if(createdHomework.students) {
       for(const student of createdHomework.students) {
         const io = getIo();
-        io.emit('homeworkCreated-' + student.studentId, createdHomework);
+        io.emit('homeworkEvent-' + student.studentId, {action: 'homeworkCreated', data: createdHomework});
       }
     }
   } catch (error) {
@@ -210,13 +210,13 @@ router.post('/new-comment', async (req, res) => {
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
     if(newComment.commentType === 'feedback' && newComment.studentId) {
       const io = getIo();
-      io.emit('homeworkCommentCreated-' + newComment.studentId, updatedHomework);
+      io.emit('homeworkEvent-' + newComment.studentId, {action: 'homeworkCommentCreated', data: updatedHomework});
     }
 
     // Emit event to all connected clients after comment is created - emit notification of submission to teacher
     if(newComment.commentType === 'submission' && newComment.teacherId) {
       const io = getIo();
-      io.emit('homeworkCommentCreated-' + newComment.teacherId, updatedHomework);
+      io.emit('homeworkEvent-' + newComment.teacherId, {action: 'homeworkCommentCreated', data: updatedHomework});
     }
 
   } catch (error) {
@@ -338,13 +338,13 @@ router.post('/delete-comment', async (req, res) => {
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
     if(commentToDelete.commentType === 'feedback' && commentToDelete.studentId) {
       const io = getIo();
-      io.emit('homeworkCommentDeleted-' + commentToDelete.studentId, updatedHomework);
+      io.emit('homeworkEvent-' + commentToDelete.studentId, {action: 'homeworkCommentDeleted', data: updatedHomework});
     }
 
     // Emit event to all connected clients after comment is created - emit notification of submission to teacher
     if(commentToDelete.commentType === 'submission' && commentToDelete.teacherId) {
       const io = getIo();
-      io.emit('homeworkCommentDeleted-' + commentToDelete.teacherId, updatedHomework);
+      io.emit('homeworkEvent-' + commentToDelete.teacherId, {action: 'homeworkCommentDeleted', data: updatedHomework});
     }
 
   } catch (error) {
