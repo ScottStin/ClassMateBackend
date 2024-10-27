@@ -273,6 +273,19 @@ router.post('/update-comment', async (req, res) => {
     }
 
     res.status(201).json(updatedHomework);
+
+    // Emit event to all connected clients after comment is created - emit notification of feedback to student
+    if(newComment.commentType === 'feedback' && newComment.studentId) {
+      const io = getIo();
+      io.emit('homeworkEvent-' + newComment.studentId, {action: 'homeworkCommentUpdated', data: updatedHomework});
+    }
+
+    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
+    if(newComment.commentType === 'submission' && newComment.teacherId) {
+      const io = getIo();
+      io.emit('homeworkEvent-' + newComment.teacherId, {action: 'homeworkCommentUpdated', data: updatedHomework});
+    }
+    
   } catch (error) {
     console.error("Error modifying comment on homework:", error);
     res.status(500).send("Internal Server Error");
