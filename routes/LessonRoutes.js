@@ -107,8 +107,8 @@ router.patch('/register-multi/:id', async (req, res) => {
 
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
-      const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+      const io2 = getIo(); // Safely get the initialized Socket.IO instance
+      io2.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
       // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
     }
   } catch (error) {
