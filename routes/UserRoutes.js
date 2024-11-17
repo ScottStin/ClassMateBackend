@@ -5,6 +5,7 @@ const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
+const { getIo } = require('../socket-io');
 
 const examModel = require('../models/exam-model');
 const userModel = require('../models/user-models');
@@ -101,7 +102,11 @@ router.patch('/:id', async (req, res) => {
   try {
     // Exclude the profilepicture property from the update
     const { profilePicture, ...updatedFields } = req.body;
-  
+
+    // get original user before updating:
+    const nonUpdatedUser = await userModel.findOne({ _id: req.params.id });
+
+    // Update user:
     const updatedUser = await userModel.findByIdAndUpdate(
       req.params.id,
       { $set: updatedFields },
@@ -111,6 +116,8 @@ router.patch('/:id', async (req, res) => {
     if (!updatedUser) {
       return res.status(404).send('User not found');
     }
+
+    // Update profile picture in cloud service:
     if(profilePicture) {
       const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder: `${updatedUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
         if (err) return console.log(err);        
@@ -125,6 +132,12 @@ router.patch('/:id', async (req, res) => {
       })
     }
     res.status(201).json(updatedUser);
+
+    // If user level is updated, notify user
+    if(updatedUser?.level.shortName !== nonUpdatedUser.level.shortName) {
+      const io = getIo();
+      io.emit('userEvent-' + updatedUser._id, {action: 'userLevelUpdated', data: updatedUser});
+    }
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).send('Internal Server Error');

@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const fetch = require('node-fetch');
-const { getIo } = require('../socket-io'); // Import the getIo function
+const { getIo } = require('../socket-io');
 
 const lessonModel = require('../models/lesson-model');
 
@@ -72,7 +72,6 @@ router.patch('/register/:id', async (req, res) => {
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
       io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
-      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
     }
   } catch (error) {
     console.error("Error join lessons:", error);
@@ -109,7 +108,6 @@ router.patch('/register-multi/:id', async (req, res) => {
     if(lesson.schoolId) {
       const io2 = getIo(); // Safely get the initialized Socket.IO instance
       io2.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
-      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
     }
   } catch (error) {
     console.error("Error join lessons:", error);
@@ -179,7 +177,6 @@ router.patch('/start-lesson/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
       io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
     }
   } catch (error) {
@@ -212,7 +209,6 @@ router.patch('/cancel/:id', async (req, res) => {
     // Emit event to all connected clients after lesson is updated
     if(lesson.schoolId) {
       const io = getIo(); // Safely get the initialized Socket.IO instance
-      // io.emit('lessonUpdated-' + lesson.schoolId, lesson);
       io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
     }
 
@@ -230,7 +226,6 @@ router.delete('/:id', async (req, res) => {
 
       // Emit event to all connected clients after lesson is deleted
       const io = getIo();
-      // io.emit('lessonDeleted-' + deletedLesson.schoolId, deletedLesson);
       io.emit('lessonEvent-' +  deletedLesson.schoolId, {action: 'lessonDeleted', data: deletedLesson});
     } else {
       res.status(404).json({ message: "Lesson not found" });

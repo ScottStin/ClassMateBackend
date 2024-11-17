@@ -16,6 +16,9 @@ const notificationSchema = mongoose.Schema({
     dateSent:{
         type: Number,
     },
+    link:{
+        type: String, default: null 
+    },
     recipients:[
         { type: String } // user ids
     ],
