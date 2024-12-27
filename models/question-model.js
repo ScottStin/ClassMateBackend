@@ -13,21 +13,27 @@ const questionSchema = mongoose.Schema({
         text: { type: String, required: true },
         correct: { type: Boolean, required: true }
     }],
-    reorderSentenceQuestionList: [{ type: String }],
+    reorderSentenceQuestionList: [{
+        text: { type: String, required: true },
+    }],
     fillBlanksQuestionList: [{
         text: { type: String, required: true },
-        blank: { type: Boolean, required: true }
+        blanks: [{ text: {type: String, required: true } }]
     }],
     matchOptionQuestionList: [{
         leftOption: { type: String, required: true },
         rightOption: { type: String, required: true }
     }],
-    audioPrompt: { type: String, default: null },
     totalPoints: { type: Number, default: null },
     lengthInMinutes: { type: Number, default: null },
-    videoPrompt: { type: String, default: null },
-    imagePrompt: { type: String, default: null },
-    // id: { type: mongoose.Schema.Types.Mixed, required: true },
+    promptUrl1: {
+        url: { type: String, default: null },
+        type: { type: String, default: null },
+    },
+    promptUrl2: {
+        url: { type: String, default: null },
+        type: { type: String, default: null },
+    },
     subQuestions: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'questionModel'
