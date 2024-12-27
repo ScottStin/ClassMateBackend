@@ -18,7 +18,7 @@ const questionSchema = mongoose.Schema({
     }],
     fillBlanksQuestionList: [{
         text: { type: String, required: true },
-        blanks: [{ text: {type: String, required: true } }]
+        blanks: [{ text: {type: String } }]
     }],
     matchOptionQuestionList: [{
         leftOption: { type: String, required: true },
