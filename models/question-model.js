@@ -24,8 +24,9 @@ const questionSchema = mongoose.Schema({
         leftOption: { type: String, required: true },
         rightOption: { type: String, required: true }
     }],
-    totalPoints: { type: Number, default: null },
-    lengthInMinutes: { type: Number, default: null },
+    totalPointsMin: { type: Number, default: 0 },
+    totalPointsMax: { type: Number, default: 5 },
+    length: { type: Number, default: null },
     promptUrl1: {
         url: { type: String, default: null },
         type: { type: String, default: null },

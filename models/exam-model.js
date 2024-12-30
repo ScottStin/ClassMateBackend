@@ -22,9 +22,8 @@ const examSchema = mongoose.Schema({
             mark: {type: String, default: null}
         }
     ],
-    totalPoints: {
-        type: Number
-    },
+    totalPointsMin: { type: Number, default: 0 },
+    totalPointsMax: { type: Number, default: 100 },
     description:{
         type: String,
     },
