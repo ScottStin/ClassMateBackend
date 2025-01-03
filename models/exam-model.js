@@ -39,9 +39,11 @@ const examSchema = mongoose.Schema({
     assignedTeacher:{
         type: String,
     },
-    autoMarking:{
-        type: Boolean,
-    },
+    aiMarkingComplete:[
+        {
+            email: { type: String },
+        }
+    ],
     // school: {
     //     type: String | Number | null,
     // },
