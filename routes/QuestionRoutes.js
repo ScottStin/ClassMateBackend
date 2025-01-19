@@ -1,14 +1,19 @@
 const express = require("express");
 const router = express.Router();
+const { cloudinary, storage } = require('../cloudinary');
 
 const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
+const userModel = require("../models/user-models");
 const { OpenAI } = require('openai');
 
 const openai = new OpenAI({
     apiKey: process.env.APIKEY
 });
 
+/**
+ * Get all exam questions
+ */
 router.get('/', async function (req, res) {
     try {
         await questionModel.find()
@@ -20,10 +25,15 @@ router.get('/', async function (req, res) {
     }
 });
 
+/**
+ * Submit student's exam question responses
+ */
 router.patch('/submit-exam/:id', async function (req, res) {
     try{
-        const userEmail = req.body.currentUser;
+        const userEmail = req.body.currentUser; // TODO - replace email with ID
         const exam = await examModel.findById(req.params.id);
+        const currentStudent = await userModel.findOne({email:userEmail})
+
         if (!exam) {
             return res.status(404).json('Exam not found');
         }
@@ -34,6 +44,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                 return res.status(404).json('Question not found');
             }
 
+            // --- Submit a section type question:
             if(foundQuestion.type.toLowerCase() === 'section' && foundQuestion.subQuestions?.length >0){
                 for(const subQuestionId of foundQuestion.subQuestions) {
                     const foundSubQuestion = await questionModel.findById(subQuestionId.toString());
@@ -51,13 +62,34 @@ router.patch('/submit-exam/:id', async function (req, res) {
                         } 
                     }
                 }
-                
-            } else {
+            } 
+
+            // --- Submit a regular (non-section) question type:
+            else {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)
                 const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.student === userEmail)
                 
                 if(submittedStudentResponse){
-                    // Set studentResponse to an empty array if it's undefined
+                    // -- If student response is an audio file, upload to cloudinary:
+                    if (foundQuestion.type.toLowerCase() === 'audio-response') {
+                        const base64String = submittedStudentResponse.response;
+                    
+                        try {
+                            // Upload the Base64 string to Cloudinary with the correct resource type
+                            const result = await cloudinary.uploader.upload(base64String, {
+                                folder: `${currentStudent.schoolId}/exam-question-responses/${exam._id}`,
+                                resource_type: 'video' // Specify 'video' for audio files
+                            });
+                    
+                            // Update the response URL
+                            submittedStudentResponse.response = result.secure_url;
+                            console.log(submittedStudentResponse.response);
+                        } catch (err) {
+                            console.error("Cloudinary upload failed:", err);
+                        }
+                    }
+
+                    // -- Set studentResponse to an empty array if it's undefined, else save
                     if(foundQuestion.studentResponse === undefined || foundQuestion.studentResponse === null) {
                         foundQuestion.studentResponse = [submittedStudentResponse];
                         await foundQuestion.save();
@@ -80,6 +112,9 @@ router.patch('/submit-exam/:id', async function (req, res) {
     }
   });
 
+/**
+ * Submit teacher's feedback for student's exam question responses
+ */
 router.patch('/submit-feedback/:id', async function (req, res) {
     try{
         const teacherEmail = req.body.currentUser;
@@ -174,10 +209,14 @@ router.patch('/submit-feedback/:id', async function (req, res) {
     }
   });
 
+
   /**
+   * ============================================
    * AI Feedback/Marking:
    * todo - move this to its own service/route
+   * ============================================
    */
+
   router.post('/generate-ai-exam-feedback/written-question', async (req, res) => {
     const { text, prompt } = req.body;
   

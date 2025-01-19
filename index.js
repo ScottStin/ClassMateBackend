@@ -26,6 +26,7 @@ const path = require('path'); // If we want this to work from different director
 // const bcrypt = require('bcrypt');
 const multer = require('multer');
 const bodyParser = require('body-parser'); // this will help us pass data in the req.body object to the backend
+// const dbUrl = process.env.DB_URL; // used for mongo atlas
 
 /**
  * ==============================
@@ -38,6 +39,7 @@ const connectDB = async () => {
   try {
     const con = await mongoose.connect(
       `mongodb://127.0.0.1:27017/${databaseName}`,
+      // dbUrl,
       {
         useNewUrlParser: true,
         useUnifiedTopology: true,
@@ -61,8 +63,12 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+// --- increase req.body size to allow for
+app.use(bodyParser.json({ limit: '50mb' })); // JSON payload limit
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true })); // URL-encoded payload limit
+
+// app.use(bodyParser.urlencoded({ extended: false }));
+// app.use(bodyParser.json());
 
 app.use(cors({
   origin: 'http://localhost:4200',
@@ -93,6 +99,7 @@ const SchoolModel = require('./models/school-models');
 const LessonTypeModel = require('./models/lesson-type-model');
 const questionModel = require('./models/question-model');
 const homeworkModel = require('./models/homework-model');
+const notificationModel = require('./models/notification-model');
 
 /**
  * ==============================
@@ -161,6 +168,7 @@ const examRouter = require('./routes/ExamRoutes');
 const schoolRouter = require('./routes/SchoolRoutes');
 const questionRouter = require('./routes/QuestionRoutes');
 const homeworkRouter = require('./routes/HomeworkRoute');
+const notificationRouter = require('./routes/NotificationRoutes');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -169,6 +177,7 @@ app.use('/questions', questionRouter);
 app.use('/lessons', lessonRouter);
 app.use('/lesson-types', lessonTypeRouter);
 app.use('/homework', homeworkRouter);
+app.use('/notifications', notificationRouter);
 
 /**
  * ==============================
