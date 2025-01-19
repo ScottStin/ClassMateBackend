@@ -6,6 +6,10 @@ const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
 const userModel = require("../models/user-models");
 const { OpenAI } = require('openai');
+const axios = require("axios");
+const FormData = require("form-data");
+const fs = require("fs");
+const path = require("path");
 
 const openai = new OpenAI({
     apiKey: process.env.APIKEY
@@ -289,5 +293,137 @@ router.patch('/submit-feedback/:id', async function (req, res) {
       res.status(500).json({ error: 'Failed to process feedback. Please try again later.' });
     }
   });
+
+  router.post("/generate-ai-exam-feedback/audio-question", async (req, res) => {
+    const { audioUrl, prompt } = req.body;
+  
+    if (!audioUrl || !prompt) {
+      return res.status(400).json({ error: "Audio link and prompt are required" });
+    }
+  
+    try {
+      // --- Step 1: Download the audio file from the URL
+      const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
+  
+      // --- Step 2: Save the audio file locally
+      const tempFilePath = path.join(__dirname, "temp-audio.wav");
+      fs.writeFileSync(tempFilePath, response.data);
+  
+      console.log("Audio file saved at:", tempFilePath);
+  
+      // --- Step 3: Send the audio file to Whisper API for transcription
+      const formData = new FormData();
+      formData.append("file", fs.createReadStream(tempFilePath));
+      formData.append("model", "whisper-1"); // Whisper model
+  
+      console.log("Sending audio file to Whisper API...");
+    //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
+
+    const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
+        headers: {
+          "Authorization": `Bearer ${process.env.APIKEY}`,
+          ...formData.getHeaders(),
+        },
+      });
+  
+      const transcription = whisperResponse.data.text.trim();
+      console.log("Transcription:", transcription);
+  
+      // --- Step 4: Use GPT API to generate feedback
+      const aiPrompt = `
+        You are an English teacher. Your student has been given the following prompt:
+  
+        ${prompt}.
+  
+        This was their transcribed audio response:
+  
+        "${transcription}"
+  
+        Provide detailed feedback on the following:
+        1. Vocabulary (vocabMark)
+        2. Grammar (grammarMark)
+        3. Content (contentMark) (i.e., how well they've understood and answered the prompt)
+        4. Fluency (fluencyMark)
+        5. Pronunciation (pronunciationMark)
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
+  
+        Finally, rate the text from 0-4 for each of the 3 categories (Vocabulary, Grammar and Content).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+  
+        Return the feedback and mark in two separate objects. For example:
+        {
+          "feedback": "Your detailed feedback here",
+          "mark": {
+            "vocabMark": 3,
+            "grammarMark": 2,
+            "contentMark": 3,
+            "fluencyMark": 4,
+            "pronunciationMark": 3
+          }
+        }
+
+        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+      `;
+  
+      
+      console.log("Sending transcription to GPT API...");
+
+      
+    //   const completion = await openai.createChatCompletion({
+    //     model: "gpt-3.5-turbo",
+    //     messages: [
+    //       { role: "system", content: "You are an English teacher." },
+    //       { role: "user", content: aiPrompt },
+    //     ],
+    //   });
+
+    const completion = await openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are an English teacher.' },
+          { role: 'user', content: aiPrompt },
+        ],
+      });
+  
+      const aiResponse = completion.choices[0].message.content.trim();
+  
+      // Parse the response
+      const result = JSON.parse(aiResponse);
+  
+      // Separate feedback and score
+      const feedback = result.feedback;
+      const mark = result.mark;
+
+      console.log(feedback);
+  
+      // Send the response with feedback and score as separate objects
+      res.json({ feedback, mark });
+    } catch (error) {
+      console.error("Error:", error.message);
+  
+      // Handle Whisper API errors
+      if (error.response && error.response.data) {
+        console.error("Whisper API Error Details:", error.response.data);
+      }
+  
+      // Handle GPT API errors
+      if (error.response && error.response.data) {
+        console.error("GPT API Error Details:", error.response.data);
+      }
+  
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+    } finally {
+      // Clean up temporary file
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          console.log("Temporary audio file deleted.");
+        }
+      } catch (cleanupError) {
+        console.error("Failed to delete temporary file:", cleanupError.message);
+      }
+    }
+  });
+  
 
 module.exports = router;
