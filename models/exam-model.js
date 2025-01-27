@@ -44,9 +44,9 @@ const examSchema = mongoose.Schema({
             email: { type: String },
         }
     ],
-    // school: {
-    //     type: String | Number | null,
-    // },
+    schoolId:{
+        type: String,
+    },
 }, {
     timestamps: true
 })

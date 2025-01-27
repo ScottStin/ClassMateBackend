@@ -27,12 +27,12 @@ const questionSchema = mongoose.Schema({
     totalPointsMin: { type: Number, default: 0 },
     totalPointsMax: { type: Number, default: 5 },
     length: { type: Number, default: null },
-    promptUrl1: {
-        url: { type: String, default: null },
+    prompt1: {
+        fileString: { type: String, default: null },
         type: { type: String, default: null },
     },
-    promptUrl2: {
-        url: { type: String, default: null },
+    prompt2: {
+        fileString: { type: String, default: null },
         type: { type: String, default: null },
     },
     subQuestions: [{

@@ -3,6 +3,7 @@ const router = express.Router();
 
 const examModel = require('../models/exam-model');
 const questionModel = require("../models/question-model");
+const { cloudinary, storage } = require('../cloudinary');
 
 router.get('/', async function (req, res) {
     try {
@@ -40,11 +41,30 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
-    const createdExam = await examModel.create(req.body.exam);
+    console.log('req.body:');
+    console.log(req.body);
+
+    
+    const createdExam = await examModel.create(req.body.examData);
+    
+    console.log('createdExam:');
+    console.log(createdExam);
     const questionIds = [];
     for (let question of req.body.questions) {
       const { subQuestions, id, ...questionData } = question;    
+
+      // --- upload prompt to cloudinary and add to question (if prompt exists):
+      if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
+        questionData.prompt1.fileString = await saveExamQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, req.body.examData.schoolId, createdExam._id)
+      }
+      if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
+        questionData.prompt2.fileString = await saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, req.body.examData.schoolId, createdExam._id)
+      }
+  
+      // --- Create parent question:
       const createdQuestion = await questionModel.create(questionData);
+
+      // --- check if question has sub questions, and if so, save them:
       if (subQuestions?.length > 0) {
         for (let question of subQuestions) {
           const { id, ...questionWithoutId } = question;
@@ -72,6 +92,19 @@ router.post('/new', async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+/**
+ * Save image/audio for exam question prompt to cloudinary
+ */
+
+async function saveExamQuestionPrompt(base64ExamPrompt, promptType, schoolId, examId) {
+    const result = await cloudinary.uploader.upload(base64ExamPrompt, {
+        folder: `${schoolId}/exam-prompts/${examId}`,
+        resource_type: promptType === 'audio' ? 'video' : 'image' // Specify 'video' for audio files. Otherwise, upload an image
+    });
+  
+  return result.secure_url;
+}
 
 router.patch('/register/:id', async (req, res) => {
   try {
