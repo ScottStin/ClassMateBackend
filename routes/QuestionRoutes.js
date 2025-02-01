@@ -213,7 +213,6 @@ router.patch('/submit-feedback/:id', async function (req, res) {
     }
   });
 
-
   /**
    * ============================================
    * AI Feedback/Marking:
@@ -221,20 +220,106 @@ router.patch('/submit-feedback/:id', async function (req, res) {
    * ============================================
    */
 
-  router.post('/generate-ai-exam-feedback/written-question', async (req, res) => {
-    const { text, prompt } = req.body;
+  /**
+   * Transcribe audio
+   * This functin downloads and transcribes the audio files
+   * Converts the audio file into a format that the AI marking can read
+   */
+  async function transcribeAudioFile(audioUrl) {
+    // --- Step 1: Download the audio file from the URL
+    const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
+      
+    // --- Step 2: Save the audio file locally
+    const tempFilePath = path.join(__dirname, "temp-audio.wav");
+    fs.writeFileSync(tempFilePath, response.data);
+
+    // console.log("Audio file saved at:", tempFilePath);
+
+    // --- Step 3: Send the audio file to Whisper API for transcription
+    const formData = new FormData();
+    formData.append("file", fs.createReadStream(tempFilePath));
+    formData.append("model", "whisper-1"); // Whisper model
+
+    // console.log("Sending audio file to Whisper API...");
+    //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
+
+    const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
+        headers: {
+          "Authorization": `Bearer ${process.env.APIKEY}`,
+          ...formData.getHeaders(),
+        },
+      });
+
+    return transcription = whisperResponse.data.text.trim();
+    // console.log("Transcription:", transcription);
+  }
+
+  /**
+   * Convert imgage to base64
+   * Converts the image url into a format that the AI marking can read
+  */
+  async function urlImageToBase64(imageUrl) {
+    try {
+      const response = await axios.get(imageUrl, {
+        responseType: 'arraybuffer'
+      });
+      const base64 = Buffer.from(response.data, 'binary').toString('base64');
+      const mimeType = response.headers['content-type'];
+      return `data:${mimeType};base64,${base64}`;
+    } catch (error) {
+      console.error('Error converting image to base64:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * This function adds media prompts to the ai prompt text:
+   */
+  async function addMediaPromptsToAiText(mediaPrompt) {
+    let mediaPrommptText = '';
   
+    if (mediaPrompt?.url && mediaPrompt?.url !== '' && mediaPrompt?.type && mediaPrompt?.type !== '') {
+      
+      // TODO - add image prompt functionaltiy (base64 is too large too send to chat gpt, and wont accept files right now. We should use somehting like dallee to describe the image first.)
+      // if(mediaPrompt?.type === 'image') {
+      //   const image1 = await urlImageToBase64(mediaPrompt.url);
+      //   mediaPrommptText = `The student was also given the following image to accompany the written prompt: ${image1}.`
+      // }
+
+      if(mediaPrompt?.type === 'audio') {
+        const audio1 = await transcribeAudioFile(mediaPrompt.url);
+        mediaPrommptText = `The student was also given the following audio file to accompany the written prompt: ${audio1}.`
+      }
+    }
+    return mediaPrommptText;
+  }
+
+  /**
+   * This generates ai feedback for written response question:
+   */
+  router.post('/generate-ai-exam-feedback/written-question', async (req, res) => {
+    const { text, prompt, mediaPrompt1, mediaPrompt2 } = req.body;
+      
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
   
+    // Create prompt
+
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+
     try {
       const aiPrompt = `
         You are an English teacher. Your student has been given the following prompt:
 
         ${prompt}.
 
-        This was their response:
+        ${mediaPrompt1Text}
+
+        ${mediaPrompt2Text}
+
+        This was the student's response:
 
         "${text}"
 
@@ -268,7 +353,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
         Please return whole numbers for the scores.
       `;
   
-      // Use chat completions in the latest SDK
+      // --- Use chat completions in the latest SDK
       const completion = await openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
@@ -279,14 +364,14 @@ router.patch('/submit-feedback/:id', async function (req, res) {
   
       const response = completion.choices[0].message.content.trim();
   
-      // Parse the response
+      // --- Parse the response
       const result = JSON.parse(response);
   
-      // Separate feedback and score
+      // --- Separate feedback and score
       const feedback = result.feedback;
       const mark = result.mark;
   
-      // Send the response with feedback and score as separate objects
+      // --- Send the response with feedback and score as separate objects
       res.json({ feedback, mark });
     } catch (error) {
       console.error('OpenAI API Error:', error);
@@ -295,49 +380,33 @@ router.patch('/submit-feedback/:id', async function (req, res) {
   });
 
   router.post("/generate-ai-exam-feedback/audio-question", async (req, res) => {
-    const { audioUrl, prompt } = req.body;
+    const { audioUrl, prompt, mediaPrompt1, mediaPrompt2 } = req.body;
   
     if (!audioUrl || !prompt) {
       return res.status(400).json({ error: "Audio link and prompt are required" });
     }
-  
-    try {
-      // --- Step 1: Download the audio file from the URL
-      const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
-  
-      // --- Step 2: Save the audio file locally
-      const tempFilePath = path.join(__dirname, "temp-audio.wav");
-      fs.writeFileSync(tempFilePath, response.data);
-  
-      console.log("Audio file saved at:", tempFilePath);
-  
-      // --- Step 3: Send the audio file to Whisper API for transcription
-      const formData = new FormData();
-      formData.append("file", fs.createReadStream(tempFilePath));
-      formData.append("model", "whisper-1"); // Whisper model
-  
-      console.log("Sending audio file to Whisper API...");
-    //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
 
-    const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
-        headers: {
-          "Authorization": `Bearer ${process.env.APIKEY}`,
-          ...formData.getHeaders(),
-        },
-      });
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+
+    try {
+      
+      const studentResponseTranscription = await transcribeAudioFile(audioUrl);
   
-      const transcription = whisperResponse.data.text.trim();
-      console.log("Transcription:", transcription);
-  
-      // --- Step 4: Use GPT API to generate feedback
       const aiPrompt = `
         You are an English teacher. Your student has been given the following prompt:
-  
+
         ${prompt}.
+
+        ${mediaPrompt1Text}
+
+        ${mediaPrompt2Text}
+
+        This was the student's response:
   
-        This was their transcribed audio response:
+        This was the student's transcribed audio response:
   
-        "${transcription}"
+        "${studentResponseTranscription}"
   
         Provide detailed feedback on the following:
         1. Vocabulary (vocabMark)
@@ -364,54 +433,32 @@ router.patch('/submit-feedback/:id', async function (req, res) {
 
         NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
       `;
-  
-      
-      console.log("Sending transcription to GPT API...");
 
-      
-    //   const completion = await openai.createChatCompletion({
-    //     model: "gpt-3.5-turbo",
-    //     messages: [
-    //       { role: "system", content: "You are an English teacher." },
-    //       { role: "user", content: aiPrompt },
-    //     ],
-    //   });
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        // Separate feedback and score
+        const feedback = result.feedback;
+        const mark = result.mark;
+    
+        // Send the response with feedback and score as separate objects
+        res.json({ feedback, mark });
 
-    const completion = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          { role: 'system', content: 'You are an English teacher.' },
-          { role: 'user', content: aiPrompt },
-        ],
-      });
-  
-      const aiResponse = completion.choices[0].message.content.trim();
-  
-      // Parse the response
-      const result = JSON.parse(aiResponse);
-  
-      // Separate feedback and score
-      const feedback = result.feedback;
-      const mark = result.mark;
-
-      console.log(feedback);
-  
-      // Send the response with feedback and score as separate objects
-      res.json({ feedback, mark });
     } catch (error) {
+
       console.error("Error:", error.message);
-  
-      // Handle Whisper API errors
-      if (error.response && error.response.data) {
-        console.error("Whisper API Error Details:", error.response.data);
-      }
-  
-      // Handle GPT API errors
-      if (error.response && error.response.data) {
-        console.error("GPT API Error Details:", error.response.data);
-      }
-  
       res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
     } finally {
       // Clean up temporary file
       try {
