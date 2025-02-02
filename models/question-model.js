@@ -35,6 +35,10 @@ const questionSchema = mongoose.Schema({
         fileString: { type: String, default: null },
         type: { type: String, default: null },
     },
+    prompt3: {
+        fileString: { type: String, default: null },
+        type: { type: String, default: null },
+    },
     subQuestions: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'questionModel'

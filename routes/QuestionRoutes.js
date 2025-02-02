@@ -298,7 +298,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
    * This generates ai feedback for written response question:
    */
   router.post('/generate-ai-exam-feedback/written-question', async (req, res) => {
-    const { text, prompt, mediaPrompt1, mediaPrompt2 } = req.body;
+    const { text, prompt, mediaPrompt1, mediaPrompt2, mediaPrompt3 } = req.body;
       
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -308,6 +308,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
 
     const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
     const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
 
     try {
       const aiPrompt = `
@@ -318,6 +319,8 @@ router.patch('/submit-feedback/:id', async function (req, res) {
         ${mediaPrompt1Text}
 
         ${mediaPrompt2Text}
+
+        ${mediaPrompt3Text}
 
         This was the student's response:
 
@@ -380,7 +383,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
   });
 
   router.post("/generate-ai-exam-feedback/audio-question", async (req, res) => {
-    const { audioUrl, prompt, mediaPrompt1, mediaPrompt2 } = req.body;
+    const { audioUrl, prompt, mediaPrompt1, mediaPrompt2, mediaPrompt3 } = req.body;
   
     if (!audioUrl || !prompt) {
       return res.status(400).json({ error: "Audio link and prompt are required" });
@@ -388,6 +391,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
 
     const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
     const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
 
     try {
       
@@ -401,6 +405,8 @@ router.patch('/submit-feedback/:id', async function (req, res) {
         ${mediaPrompt1Text}
 
         ${mediaPrompt2Text}
+
+        ${mediaPrompt3Text}
 
         This was the student's response:
   
