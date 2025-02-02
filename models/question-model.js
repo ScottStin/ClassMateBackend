@@ -47,7 +47,7 @@ const questionSchema = mongoose.Schema({
             grammarMark: {type: String, default: null},
             contentMark: {type: String, default: null},
             fluencyMark: {type: String, default: null},
-            pronounciationMark: {type: String, default: null},
+            pronunciationMark: {type: String, default: null},
             accuracyMark: {type: String, default: null},
             totalMark: {type: String, default: null},
          },
