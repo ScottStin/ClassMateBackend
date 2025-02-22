@@ -75,7 +75,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                 
                 if(submittedStudentResponse){
                     // -- If student response is an audio file, upload to cloudinary:
-                    if (foundQuestion.type.toLowerCase() === 'audio-response') {
+                    if (['audio-response', 'repeat-sentence'].includes(foundQuestion.type.toLowerCase())) {
                         const base64String = submittedStudentResponse.response;
                     
                         try {
@@ -226,32 +226,42 @@ router.patch('/submit-feedback/:id', async function (req, res) {
    * Converts the audio file into a format that the AI marking can read
    */
   async function transcribeAudioFile(audioUrl) {
-    // --- Step 1: Download the audio file from the URL
-    const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
-      
-    // --- Step 2: Save the audio file locally
-    const tempFilePath = path.join(__dirname, "temp-audio.wav");
-    fs.writeFileSync(tempFilePath, response.data);
+    try {
+      // --- Step 1: Download the audio file from the URL
+      const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
+        
+      // --- Step 2: Save the audio file locally
+      const tempFilePath = path.join(__dirname, "temp-audio.wav");
+      await fs.promises.writeFile(tempFilePath, response.data);
 
-    // console.log("Audio file saved at:", tempFilePath);
+      // console.log("Audio file saved at:", tempFilePath);
 
-    // --- Step 3: Send the audio file to Whisper API for transcription
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(tempFilePath));
-    formData.append("model", "whisper-1"); // Whisper model
+      // --- Step 3: Send the audio file to Whisper API for transcription
+      const formData = new FormData();
+      formData.append("file", fs.createReadStream(tempFilePath));
+      formData.append("model", "whisper-1"); // Whisper model
 
-    // console.log("Sending audio file to Whisper API...");
-    //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
+      // console.log("Sending audio file to Whisper API...");
+      //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
 
-    const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
-        headers: {
-          "Authorization": `Bearer ${process.env.APIKEY}`,
-          ...formData.getHeaders(),
-        },
-      });
+      const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
+          headers: {
+            "Authorization": `Bearer ${process.env.APIKEY}`,
+            ...formData.getHeaders(),
+          },
+        });
 
-    return transcription = whisperResponse.data.text.trim();
-    // console.log("Transcription:", transcription);
+      const transcription = whisperResponse.data.text.trim();
+
+      // Step 4: Cleanup - Delete temporary file
+      // await fs.promises.unlink(tempFilePath);
+      // console.log("Transcription:", transcription);
+
+      return transcription;
+    } catch (error) {
+      console.error("Error in transcribing:", error.message);
+      return null; // Return null in case of failure
+    }
   }
 
   /**
@@ -276,22 +286,22 @@ router.patch('/submit-feedback/:id', async function (req, res) {
    * This function adds media prompts to the ai prompt text:
    */
   async function addMediaPromptsToAiText(mediaPrompt) {
-    let mediaPrommptText = '';
+    let mediaPromptText = '';
   
     if (mediaPrompt?.url && mediaPrompt?.url !== '' && mediaPrompt?.type && mediaPrompt?.type !== '') {
       
       // TODO - add image prompt functionaltiy (base64 is too large too send to chat gpt, and wont accept files right now. We should use somehting like dallee to describe the image first.)
       // if(mediaPrompt?.type === 'image') {
       //   const image1 = await urlImageToBase64(mediaPrompt.url);
-      //   mediaPrommptText = `The student was also given the following image to accompany the written prompt: ${image1}.`
+      //   mediaPromptText = `The student was also given the following image to accompany the written prompt: ${image1}.`
       // }
 
       if(mediaPrompt?.type === 'audio') {
         const audio1 = await transcribeAudioFile(mediaPrompt.url);
-        mediaPrommptText = `The student was also given the following audio file to accompany the written prompt: ${audio1}.`
+        mediaPromptText = `The student was also given the following audio file to accompany the written prompt (the following is a transcript of the audio file they were given): ${audio1}.`
       }
     }
-    return mediaPrommptText;
+    return mediaPromptText;
   }
 
   /**
@@ -434,6 +444,92 @@ router.patch('/submit-feedback/:id', async function (req, res) {
             "contentMark": 3,
             "fluencyMark": 4,
             "pronunciationMark": 3
+          }
+        }
+
+        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+      `;
+
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        // Separate feedback and score
+        const feedback = result.feedback;
+        const mark = result.mark;
+    
+        // Send the response with feedback and score as separate objects
+        res.json({ feedback, mark });
+
+    } catch (error) {
+
+      console.error("Error:", error.message);
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
+    } finally {
+      // Clean up temporary file
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          console.log("Temporary audio file deleted.");
+        }
+      } catch (cleanupError) {
+        console.error("Failed to delete temporary file:", cleanupError.message);
+      }
+    }
+  });
+
+  router.post("/generate-ai-exam-feedback/repeat-sentence", async (req, res) => {
+    const { audioUrl, prompt, mediaPrompt1 } = req.body;
+
+    if (!audioUrl || !prompt) {
+      return res.status(400).json({ error: "Audio link and prompt are required" });
+    }
+
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+
+    try {
+      
+      const studentResponseTranscription = await transcribeAudioFile(audioUrl);
+  
+      const aiPrompt = `
+        You are an English teacher. Your student has been given the following prompt:
+
+        ${prompt}.
+
+        ${mediaPrompt1Text}
+
+        The student is required to listen to the audio prompt and repeat it, word for word.
+  
+        This was the student's transcribed audio response:
+  
+        "${studentResponseTranscription}"
+  
+        Provide detailed feedback on the following:
+        1. Accuracy (accuracyMark) (i.e. how closely what the student said matches the prompt. Remember that they should repeat the prompt, word for word.)
+        2. Fluency (fluencyMark)
+        3. Pronunciation (pronunciationMark)
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
+  
+        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+  
+        Return the feedback and mark in two separate objects. For example:
+        {
+          "feedback": "Your detailed feedback here",
+          "mark": {
+            "accuracyMark": 3,
+            "fluencyMark": 2,
+            "pronunciationMark": 3,
           }
         }
 
