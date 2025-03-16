@@ -75,7 +75,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                 
                 if(submittedStudentResponse){
                     // -- If student response is an audio file, upload to cloudinary:
-                    if (['audio-response', 'repeat-sentence'].includes(foundQuestion.type.toLowerCase())) {
+                    if (['audio-response', 'repeat-sentence', 'read-outloud'].includes(foundQuestion.type.toLowerCase())) {
                         const base64String = submittedStudentResponse.response;
                     
                         try {
@@ -516,6 +516,86 @@ router.patch('/submit-feedback/:id', async function (req, res) {
   
         Provide detailed feedback on the following:
         1. Accuracy (accuracyMark) (i.e. how closely what the student said matches the prompt. Remember that they should repeat the prompt, word for word.)
+        2. Fluency (fluencyMark)
+        3. Pronunciation (pronunciationMark)
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
+  
+        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+  
+        Return the feedback and mark in two separate objects. For example:
+        {
+          "feedback": "Your detailed feedback here",
+          "mark": {
+            "accuracyMark": 3,
+            "fluencyMark": 2,
+            "pronunciationMark": 3,
+          }
+        }
+
+        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+      `;
+
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        // Separate feedback and score
+        const feedback = result.feedback;
+        const mark = result.mark;
+    
+        // Send the response with feedback and score as separate objects
+        res.json({ feedback, mark });
+
+    } catch (error) {
+
+      console.error("Error:", error.message);
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
+    } finally {
+      // Clean up temporary file
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+          console.log("Temporary audio file deleted.");
+        }
+      } catch (cleanupError) {
+        console.error("Failed to delete temporary file:", cleanupError.message);
+      }
+    }
+  });
+
+  router.post("/generate-ai-exam-feedback/read-outloud", async (req, res) => {
+    const { audioUrl, prompt } = req.body;
+
+    if (!audioUrl || !prompt) {
+      return res.status(400).json({ error: "Audio link and prompt are required" });
+    }
+
+    try {
+      
+      const studentResponseTranscription = await transcribeAudioFile(audioUrl);
+  
+      const aiPrompt = `
+        You are an English teacher. Your student is required to read the given text out loud, word for word. They will be marked on pronunciation, fluency and accuracy. Here is the text they have been given to read:
+
+        ${prompt}.
+  
+        This was the student's transcribed audio response:
+  
+        "${studentResponseTranscription}"
+  
+        Provide detailed feedback on the following:
+        1. Accuracy (accuracyMark) (i.e. how closely what the student said matches the prompt. Remember that they should read the prompt, word for word.)
         2. Fluency (fluencyMark)
         3. Pronunciation (pronunciationMark)
   
