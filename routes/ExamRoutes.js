@@ -7,7 +7,16 @@ const { cloudinary, storage } = require('../cloudinary');
 
 router.get('/', async function (req, res) {
     try {
-        await examModel.find()
+        // Extract the currentSchoolId from the query parameters
+        const currentSchoolId = req.query.currentSchoolId;
+      
+        // If currentSchoolId is provided, filter exam by schoolId
+        let filter = {};
+        if (currentSchoolId) {
+          filter = { schoolId: currentSchoolId };
+        }
+
+        await examModel.find(filter)
         .then(exams => {res.json(exams)})
         .catch(err => res.status(400).json('Error: ' + err));
     } catch (error) {
@@ -51,7 +60,10 @@ router.post('/new', async (req, res) => {
     console.log(createdExam);
     const questionIds = [];
     for (let question of req.body.questions) {
-      const { subQuestions, id, ...questionData } = question;    
+      const { subQuestions, id, ...questionData } = question;
+
+      // Add examId of newly created exam to questionData:
+      questionData.examId = createdExam._id;
 
       // --- upload prompt to cloudinary and add to question (if prompt exists):
       if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
@@ -71,6 +83,7 @@ router.post('/new', async (req, res) => {
           const questionData = {
             ...questionWithoutId,
             parent: createdQuestion.id,
+            examId: createdExam._id, // Add examId to sub questio
           };
           const createdSubQuestion = await questionModel.create(questionData);
           createdQuestion.subQuestions.push(createdSubQuestion.id);

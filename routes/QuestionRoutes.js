@@ -20,7 +20,16 @@ const openai = new OpenAI({
  */
 router.get('/', async function (req, res) {
     try {
-        await questionModel.find()
+      // Extract the examId from the query parameters
+      const examId = req.query.examId;
+
+      // If examId is provided, filter questions by examId
+      let filter = {};
+      if (examId) {
+        filter = { examId: examId };
+      }
+
+      await questionModel.find(filter)
         .then(questions => {res.json(questions)})
         .catch(err => res.status(400).json('Error: ' + err));
     } catch (error) {

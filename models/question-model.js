@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const questionSchema = mongoose.Schema({
     name: { type: String, required: true },
+    examId: { type: String, required: true },
     writtenPrompt: { type: String, default: null },
     teacherFeedback: { type: Boolean, default: null },
     autoMarking: { type: Boolean, default: null },
