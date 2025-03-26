@@ -43,9 +43,9 @@ router.get('/', async function (req, res) {
  */
 router.patch('/submit-exam/:id', async function (req, res) {
     try{
-        const userEmail = req.body.currentUser; // TODO - replace email with ID
+        const studentId = req.body.currentUserId;
         const exam = await examModel.findById(req.params.id);
-        const currentStudent = await userModel.findOne({email:userEmail})
+        const currentStudent = await userModel.findOne({_id:studentId})
 
         if (!exam) {
             return res.status(404).json('Exam not found');
@@ -62,7 +62,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                 for(const subQuestionId of foundQuestion.subQuestions) {
                     const foundSubQuestion = await questionModel.findById(subQuestionId.toString());
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
-                    const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.student === userEmail)
+                    const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
     
                     if(submittedSubQuestionStudentResponse){
                         // Set studentResponse to an empty array if it's undefined
@@ -80,7 +80,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
             // --- Submit a regular (non-section) question type:
             else {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)
-                const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.student === userEmail)
+                const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
                 
                 if(submittedStudentResponse){
                     // -- If student response is an audio file, upload to cloudinary:
@@ -113,10 +113,10 @@ router.patch('/submit-exam/:id', async function (req, res) {
                 }
             }
         }
-        if (exam.studentsCompleted.includes({email: userEmail, mark: null})) {
+        if (exam.studentsCompleted.includes({studentId: studentId, mark: null})) {
             return res.status(400).json('User has already completed this exam');
           }
-          exam.studentsCompleted.push({email: userEmail, mark: null});
+          exam.studentsCompleted.push({studentId: studentId, mark: null});
           await exam.save();
         res.status(200).json('Responses submitted successfully');
     } catch (error) {
@@ -130,8 +130,8 @@ router.patch('/submit-exam/:id', async function (req, res) {
  */
 router.patch('/submit-feedback/:id', async function (req, res) {
     try{
-        const teacherEmail = req.body.currentUser;
-        const studentEmail = req.body.student;
+        const teacherId = req.body.currentUserId;
+        const studentId = req.body.studentId;
         const exam = await examModel.findById(req.params.id);
         if (!exam) {
             return res.status(404).json('Exam not found');
@@ -147,7 +147,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                 for(const subQuestionId of foundQuestion.subQuestions) {
                     const foundSubQuestion = await questionModel.findById(subQuestionId.toString());
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
-                    const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.student === studentEmail)
+                    const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
     
                     if(submittedSubQuestionStudentResponse){
 
@@ -158,15 +158,15 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                         } 
 
                         // if the student hasn't answered the question, add an object in the student response array to represent them:
-                        if(!foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail)) {
-                            foundSubQuestion.studentResponse.push({student:studentEmail, response: null, mark: null, feedback: null})
+                        if(!foundSubQuestion.studentResponse.find((obj)=>obj.student === studentId)) {
+                            foundSubQuestion.studentResponse.push({student:studentId, response: null, mark: null, feedback: null})
                         }
 
-                        if(foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.mark !== undefined) {
-                            foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail).mark = submittedSubQuestionStudentResponse.mark ?? null;
+                        if(foundSubQuestion.studentResponse.find((obj)=>obj.student === studentId)?.mark !== undefined) {
+                            foundSubQuestion.studentResponse.find((obj)=>obj.student === studentId).mark = submittedSubQuestionStudentResponse.mark ?? null;
                         }
-                        if(foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.feedback !== undefined) {
-                            foundSubQuestion.studentResponse.find((obj)=>obj.student === studentEmail).feedback = submittedSubQuestionStudentResponse.feedback ?? null;
+                        if(foundSubQuestion.studentResponse.find((obj)=>obj.student === studentId)?.feedback !== undefined) {
+                            foundSubQuestion.studentResponse.find((obj)=>obj.student === studentId).feedback = submittedSubQuestionStudentResponse.feedback ?? null;
                         }
                         await foundSubQuestion.save();
                         // } 
@@ -175,7 +175,7 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                 
             } else {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)
-                const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.student === studentEmail)
+                const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.student === studentId)
 
                 if(submittedStudentResponse){
                     // Set studentResponse to an empty array if it's undefined
@@ -185,34 +185,34 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                     } 
 
                     // if the student hasn't answered the question, add an object in the student response array to represent them:
-                    if(!foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)) {
-                        foundQuestion.studentResponse.push({student:studentEmail, response: null, mark: null, feedback: null})
+                    if(!foundQuestion.studentResponse.find((obj)=>obj.student === studentId)) {
+                        foundQuestion.studentResponse.push({student:studentId, response: null, mark: null, feedback: null})
                     }
 
-                    if(foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.mark !== undefined) {
-                        foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail).mark = submittedStudentResponse.mark ?? null;
+                    if(foundQuestion.studentResponse.find((obj)=>obj.student === studentId)?.mark !== undefined) {
+                        foundQuestion.studentResponse.find((obj)=>obj.student === studentId).mark = submittedStudentResponse.mark ?? null;
                     }
-                    if(foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.feedback !== undefined) {
-                        foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail).feedback = submittedStudentResponse.feedback ?? null;
+                    if(foundQuestion.studentResponse.find((obj)=>obj.student === studentId)?.feedback !== undefined) {
+                        foundQuestion.studentResponse.find((obj)=>obj.student === studentId).feedback = submittedStudentResponse.feedback ?? null;
                     }
-                    // foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.mark =  submittedStudentResponse.mark ?? null;
-                    // foundQuestion.studentResponse.find((obj)=>obj.student === studentEmail)?.feedback =  submittedStudentResponse.feedback ?? null;
+                    // foundQuestion.studentResponse.find((obj)=>obj.student === studentId)?.mark =  submittedStudentResponse.mark ?? null;
+                    // foundQuestion.studentResponse.find((obj)=>obj.student === studentId)?.feedback =  submittedStudentResponse.feedback ?? null;
                     await foundQuestion.save();
                     // } 
                 }
             }
         }
-        // if (exam.studentsCompleted.includes({email: userEmail, mark: null})) {
+        // if (exam.studentsCompleted.includes({studentId: studentId, mark: null})) {
         //     return res.status(400).json('User has already completed this exam');
         // }
 
         if(req.body.score) {
-            exam.studentsCompleted.find((obj=>obj.email===studentEmail)).mark = req.body.score;
+            exam.studentsCompleted.find((obj=>obj.studentId===studentId)).mark = req.body.score;
         } 
 
-        if(req.body.aiMarkingComplete && !exam.aiMarkingComplete?.map((student) => student.email).includes(studentEmail)) {
+        if(req.body.aiMarkingComplete && !exam.aiMarkingComplete?.map((student) => student.studentId).includes(studentId)) {
             exam.aiMarkingComplete = exam.aiMarkingComplete ?? {}; // todo = remove
-            exam.aiMarkingComplete.push({email:studentEmail});
+            exam.aiMarkingComplete.push({studentId:studentId});
         }
         await exam.save();
         res.status(200).json('Responses submitted successfully');

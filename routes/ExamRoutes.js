@@ -32,13 +32,13 @@ router.get('/', async function (req, res) {
 //       return res.status(404).json('Default exam not found');
 //     }
 
-//     const userEmail = req.body.email;
+//     const studentId = req.body.studentId;
 
-//     if (exam.studentsEnrolled.includes(userEmail)) {
+//     if (exam.studentsEnrolled.includes(studentId)) {
 //       return res.status(400).json('User has already signed up for this exam');
 //     }
 
-//     exam.studentsEnrolled.push(userEmail);
+//     exam.studentsEnrolled.push(studentId);
 //     await exam.save();
 
 //     res.json(`Student added to: ${exam}`);
@@ -127,13 +127,13 @@ router.patch('/register/:id', async (req, res) => {
       return res.status(404).json('Exam not found');
     }
 
-    const userEmail = req.body.email;
+    const userId = req.body._id;
 
-    if (exam.studentsEnrolled.includes(userEmail)) {
+    if (exam.studentsEnrolled.includes(userId)) {
       return res.status(400).json('User has already signed up for this exam');
     }
 
-    exam.studentsEnrolled.push(userEmail);
+    exam.studentsEnrolled.push(userId);
     await exam.save();
 
     res.json(`Student added to: ${exam}`);

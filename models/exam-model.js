@@ -18,7 +18,7 @@ const examSchema = mongoose.Schema({
     ],
     studentsCompleted: [
         {
-            email: { type: String },
+            studentId: { type: String },
             mark: {type: String, default: null}
         }
     ],
@@ -36,12 +36,12 @@ const examSchema = mongoose.Schema({
     default:{
         type: Boolean,
     },
-    assignedTeacher:{
+    assignedTeacherId:{
         type: String,
     },
     aiMarkingComplete:[
         {
-            email: { type: String },
+            studentId: { type: String },
         }
     ],
     schoolId:{

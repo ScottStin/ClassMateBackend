@@ -45,7 +45,7 @@ const questionSchema = mongoose.Schema({
         ref: 'questionModel'
     }],
     studentResponse: [{
-        student: { type: String, default: null },
+        studentId: { type: String, default: null },
         response: { type: String, default: null },
         mark: { 
             vocabMark: {type: String, default: null}, 
