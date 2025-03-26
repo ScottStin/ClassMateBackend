@@ -169,6 +169,7 @@ const schoolRouter = require('./routes/SchoolRoutes');
 const questionRouter = require('./routes/QuestionRoutes');
 const homeworkRouter = require('./routes/HomeworkRoute');
 const notificationRouter = require('./routes/NotificationRoutes');
+const messengerRouter = require('./routes/MessengerRoutes');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -178,6 +179,7 @@ app.use('/lessons', lessonRouter);
 app.use('/lesson-types', lessonTypeRouter);
 app.use('/homework', homeworkRouter);
 app.use('/notifications', notificationRouter);
+app.use('/messages', messengerRouter);
 
 /**
  * ==============================
