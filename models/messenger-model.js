@@ -74,13 +74,13 @@ const messageSchema = new mongoose.Schema({
     },
 });
 
-const ChatGroup = mongoose.model('ChatGroup', chatGroupSchema);
-const Message = mongoose.model('Message', messageSchema);
+// const ChatGroup = mongoose.model('ChatGroup', chatGroupSchema);
+module.exports = mongoose.model('messageModel', messageSchema);
 
-module.exports = {
-    ChatGroup,
-    Message,
-};
+// module.exports = {
+//     ChatGroup,
+//     messageModel,
+// };
 
 
 // DEMO EXAMPLE FROM NESTJS:
