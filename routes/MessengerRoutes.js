@@ -3,152 +3,7 @@ const router = express.Router();
 const { getIo } = require('../socket-io'); // Import the getIo function
 const messageModel = require('../models/messenger-model');
 
-
-
-  // const demoMessages = [
-  //   {
-  //     _id: 'msg1',
-  //     messageText: 'Hey team, the deadline is tomorrow!',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: undefined, // Since it's a group chat, recipients are implied
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: undefined,
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-19T09:00:00Z',
-  //   },
-  //   {
-  //     _id: 'msg2',
-  //     messageText: 'Got it, I will finish my part today.',
-  //     senderId: '67e51e7a31c4f5a6cca28572',
-  //     recipients: undefined,
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: undefined,
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-19T10:15:00Z',
-  //   },
-  //   {
-  //     _id: 'msg3',
-  //     messageText: 'Wanna hang out tonight?',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: [{ userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' }], // Direct message
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T19:45:00Z',
-  //   },
-  //   {
-  //     _id: 'msg4',
-  //     messageText: 'Sure, where should we meet?',
-  //     senderId: '67e917d713fc7fa0ca996c18',
-  //     recipients: [{ userId: '67e5223431c4f5a6cca2880f', seenAt: undefined }], // Not yet seen by sender
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T20:10:00Z',
-  //   },
-  //   {
-  //     _id: 'msg5',
-  //     messageText: 'Check out this file',
-  //     senderId: '67e51ee031c4f5a6cca2857e',
-  //     recipients: undefined,
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: { url: 'https://example.com/file.pdf', fileName: 'file.pdf' },
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-19T11:00:00Z',
-  //   },
-  //   {
-  //     _id: 'msg6',
-  //     messageText: 'Test multi message',
-  //     senderId: '67e51ee031c4f5a6cca2857e',
-  //     recipients: [
-  //       { userId: '67e5223431c4f5a6cca2880f', seenAt: undefined },
-  //       { userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' },
-  //       { userId: '67ed89ebdd2a9034679c6c1f', seenAt: '2025-03-19T20:00:00Z' },
-  //       { userId: '67ed8b15dd2a9034679c6c33', seenAt: '2025-03-19T20:00:00Z' },
-  //     ],
-  //     deleted: false,
-  //     edited: false,
-  //     attachment: { url: 'https://example.com/file.pdf', fileName: 'file.pdf' },
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T11:00:00Z',
-  //   },
-  //   {
-  //     _id: 'msg7',
-  //     messageText: 'Wanna hang out tonight?',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: [{ userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' }], // Direct message
-  //     deleted: false,
-  //     edited: true,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T19:45:00Z',
-  //   },
-  //   {
-  //     _id: 'msg8',
-  //     messageText: 'Wanna hang out tonight?',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: [{ userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' }], // Direct message
-  //     deleted: false,
-  //     edited: true,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T19:45:00Z',
-  //   },
-  //   {
-  //     _id: 'msg9',
-  //     messageText: 'Wanna hang out tonight?',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: [{ userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' }], // Direct message
-  //     deleted: true,
-  //     edited: true,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T19:45:00Z',
-  //   },
-  //   {
-  //     _id: 'msg10',
-  //     messageText: 'Wanna hang out tonight?',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     recipients: [{ userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T20:00:00Z' }], // Direct message
-  //     deleted: true,
-  //     edited: true,
-  //     attachment: undefined,
-  //     chatGroupId: undefined,
-  //     createdAt: '2025-03-19T19:45:00Z',
-  //   },
-  //   {
-  //     _id: 'msg1',
-  //     messageText: 'Hey team, the deadline is tomorrow!',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-25T11:00:00Z',
-  //     deleted: false,
-  //     edited: true,
-  //   },
-  //   {
-  //     _id: 'msg1',
-  //     messageText: 'Hey team, the deadline is tomorrow!',
-  //     senderId: '67e5223431c4f5a6cca2880f',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-19T09:00:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  //   {
-  //     _id: 'msg2',
-  //     messageText: 'Got it, I will finish my part today.',
-  //     senderId: '67e51e7a31c4f5a6cca28572',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-19T10:15:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  
+  // const demoMessages = []
   //   // Message from yesterday
   //   {
   //     _id: 'msg11',
@@ -167,39 +22,6 @@ const messageModel = require('../models/messenger-model');
   //     senderId: '67e917d713fc7fa0ca996c18',
   //     chatGroupId: 'group1',
   //     createdAt: '2025-03-17T08:45:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  
-  //   // Message from last week
-  //   {
-  //     _id: 'msg13',
-  //     messageText: 'Any updates on the feature release?',
-  //     senderId: '67ed89ebdd2a9034679c6c1f',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-11T16:20:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  
-  //   // Message from last month
-  //   {
-  //     _id: 'msg14',
-  //     messageText: 'Check out the monthly report.',
-  //     senderId: '67ed8b15dd2a9034679c6c33',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-02-10T12:10:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  
-  //   // Message from last year
-  //   {
-  //     _id: 'msg15',
-  //     messageText: 'Happy New Year, everyone!',
-  //     senderId: '67e9a4399a57f5e4aa18ece8',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2024-12-31T23:59:00Z',
   //     deleted: false,
   //     edited: false,
   //   },
@@ -241,20 +63,7 @@ const messageModel = require('../models/messenger-model');
             { 'recipients.userId': currentUserId }
           ]
         });
-    
-        // const test = demoMessages.filter(
-        //     (message) =>
-        //       message.senderId === currentUserId ||
-        //       message.recipients
-        //         ?.map((recipients) => recipients.userId)
-        //         .includes(currentUserId) ||
-        //       (message.chatGroupId !== undefined &&
-        //         demoChatGroups.filter(
-        //           (group) =>
-        //             group._id === message.chatGroupId &&
-        //             group.members.map((member) => member.userId).includes(currentUserId)
-        //         ))
-        //   );
+
         res.json(messages);
     } catch (error) {
         console.error("Error getting messages:", error);
@@ -299,16 +108,18 @@ router.get('/groups', async function (req, res) {
 
 router.post('/new-message', async (req, res) => {
   try {
-    console.log('req.body:');
-    console.log(req.body);
-
     const newMessage = await messageModel.create({...req.body, createdAt: new Date()});
-    
-    console.log('newMessage:');
-    console.log(newMessage);
-
     await newMessage.save();
     res.status(201).json(newMessage);
+
+    // Emit event to all connected clients after message is created
+    if(newMessage.recipients) {
+      for(const recipient of newMessage.recipients.map((recipient) => recipient.userId)) {
+        const io = getIo(); // Safely get the initialized Socket.IO instance
+        io.emit('messageSent-' + recipient, newMessage);
+      }
+    }
+
   } catch (error) {
     console.error("Error creating new message:", error);
     res.status(500).send("Internal Server Error");
