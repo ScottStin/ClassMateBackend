@@ -116,7 +116,7 @@ router.post('/new-message', async (req, res) => {
     if(newMessage.recipients) {
       for(const recipient of newMessage.recipients.map((recipient) => recipient.userId)) {
         const io = getIo(); // Safely get the initialized Socket.IO instance
-        io.emit('messageSent-' + recipient, newMessage);
+        io.emit('messageEvent-' + recipient, {action: 'messageSent', data: newMessage});
       }
     }
 
@@ -126,5 +126,64 @@ router.post('/new-message', async (req, res) => {
   }
 });
 
-module.exports = router;
+router.patch('/:id', async (req, res) => {
+  try {
+    const updatedMessage = await messageModel.findById(req.params.id);
 
+    if (!updatedMessage) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    updatedMessage.messageText = req.body.messageText;
+    updatedMessage.edited = new Date();
+  
+    await updatedMessage.save();
+    res.status(201).json(updatedMessage);
+
+    // Emit event to all connected clients after message is updated
+    const io = getIo();
+    if(updatedMessage.recipients) {
+      for(const recipient of updatedMessage.recipients.map((recipient) => recipient.userId)) {
+        io.emit('messageEvent-' + recipient, {action: 'messageUpdated', data: updatedMessage});
+      }
+    }
+    io.emit('messageEvent-' + updatedMessage.senderId, {action: 'messageUpdated', data: updatedMessage});
+  } catch (error) {
+    console.error("Error updating new message:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedMessage = await messageModel.findById(req.params.id);
+    if (!deletedMessage) {
+      return res.status(404).json({ message: 'Message not found' });
+    }
+
+    // Mark as deleted and clear unwanted fields
+    deletedMessage.deleted = true;
+    deletedMessage.messageText = ' ';
+    deletedMessage.attachment = undefined;
+    deletedMessage.edited = undefined;
+    // todo - remove cloudinary attachment
+  
+    // Save the changes
+    await deletedMessage.save();
+    res.status(200).json(deletedMessage);
+
+    // Emit event to all connected clients after message is deleted
+    const io = getIo();
+    if(deletedMessage.recipients) {
+      for(const recipient of deletedMessage.recipients.map((recipient) => recipient.userId)) {
+        io.emit('messageEvent-' + recipient, {action: 'messageDeleted', data: deletedMessage});
+      }
+    }
+    io.emit('messageEvent-' + deletedMessage.senderId, {action: 'messageDeleted', data: deletedMessage});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+module.exports = router;

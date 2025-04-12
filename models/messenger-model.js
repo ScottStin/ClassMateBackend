@@ -48,8 +48,8 @@ const messageSchema = new mongoose.Schema({
         required: true,
     },
     edited: {
-        type: Boolean,
-        required: true,
+        type: Date,
+        required: false,
     },
     attachment: messageAttachmentSchema,
     chatGroupId: {
