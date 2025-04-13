@@ -126,6 +126,40 @@ router.post('/new-message', async (req, res) => {
   }
 });
 
+router.patch('/mark-as-seen', async (req, res) => {
+  try {
+    const { messagesToMarkIds, currentUserId } = req.body;
+
+    // Fetch the messages by their IDs
+    const messages = await messageModel.find({ '_id': { $in: messagesToMarkIds } });
+
+    // Loop over each message
+    const updatePromises = messages.map(async (message) => {
+      // Check if the current user is in the recipients array
+      const recipientIndex = message.recipients.findIndex(
+        (recipient) => recipient.userId === currentUserId
+      );
+
+      if (recipientIndex !== -1) {
+        // Update the seenAt property for the matched recipient
+        message.recipients[recipientIndex].seenAt = new Date();  //  moment().toISOString(); Get current time in ISO format
+
+        // Save the updated message
+        await message.save();
+      }
+    });
+
+    // Wait for all updates to complete
+    await Promise.all(updatePromises);
+
+    // Respond with success
+    res.status(200).json({ message: 'Messages marked as seen' });
+  } catch (error) {
+    console.error('Error marking messages as seen:', error);
+    res.status(500).json({ error: 'Failed to mark messages as seen' });
+  }
+});
+
 router.patch('/:id', async (req, res) => {
   try {
     const updatedMessage = await messageModel.findById(req.params.id);

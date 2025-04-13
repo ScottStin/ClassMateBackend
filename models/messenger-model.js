@@ -6,7 +6,7 @@ const messageRecipientsSchema = new mongoose.Schema({
         required: true,
     },
     seenAt: {
-        type: String,
+        type: Date,
         required: false,
     },
 });
