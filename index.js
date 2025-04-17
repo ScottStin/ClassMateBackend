@@ -1,5 +1,25 @@
 /**
  * ==============================
+ *  INSTRUCTIONS TO SETUP DEV ENVIRONMENT
+ * ==============================
+*/
+
+// Install nodejs v 16.13.2
+// Install npm packages with command 'npm install' in backend folder
+// Install nodemon with npm install -g nodemon
+// Download mongoDB/mongod (now just mongodash): https://www.youtube.com/watch?v=TLavdoNkFik
+// Open your command shell (gitbash) and run the command 'mongosh' to start mongo/mongod
+// install additional packages (express, cors, multer, mongoose, express-sessions etc.) with this command:
+// // npm install express cors multer body-parser mongoose passport passport-local express-session connect-mongo bcrypt dotenv socket.io
+// ensure .env file has the following keys:
+// // - CLOUDINARY_CLOUD_NAME
+// // - CLOUDINARY_KEY
+// // - CLOUDINARY_SECRET
+// // - APIKEY
+// start backend with 'nodemon index.js'
+
+/**
+ * ==============================
  *  DEVELOPMENT or PRODUCTION MODE
  * ==============================
 */
@@ -100,6 +120,7 @@ const LessonTypeModel = require('./models/lesson-type-model');
 const questionModel = require('./models/question-model');
 const homeworkModel = require('./models/homework-model');
 const notificationModel = require('./models/notification-model');
+const conversationModel = require('./models/conversation-model');
 
 /**
  * ==============================
@@ -170,6 +191,7 @@ const questionRouter = require('./routes/QuestionRoutes');
 const homeworkRouter = require('./routes/HomeworkRoute');
 const notificationRouter = require('./routes/NotificationRoutes');
 const messengerRouter = require('./routes/MessengerRoutes');
+const conversationRouter = require('./routes/ConversationRoutes');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -180,6 +202,7 @@ app.use('/lesson-types', lessonTypeRouter);
 app.use('/homework', homeworkRouter);
 app.use('/notifications', notificationRouter);
 app.use('/messages', messengerRouter);
+app.use('/conversations', conversationRouter);
 
 /**
  * ==============================

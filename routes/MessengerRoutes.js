@@ -3,72 +3,92 @@ const router = express.Router();
 const { getIo } = require('../socket-io'); // Import the getIo function
 const messageModel = require('../models/messenger-model');
 
-  // const demoMessages = []
-  //   // Message from yesterday
-  //   {
-  //     _id: 'msg11',
-  //     messageText: 'Reminder: Meeting notes are shared.',
-  //     senderId: '67e51ee031c4f5a6cca2857e',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-18T14:30:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  
-  //   // Message from earlier this week (Monday)
-  //   {
-  //     _id: 'msg12',
-  //     messageText: 'I have updated the docs!',
-  //     senderId: '67e917d713fc7fa0ca996c18',
-  //     chatGroupId: 'group1',
-  //     createdAt: '2025-03-17T08:45:00Z',
-  //     deleted: false,
-  //     edited: false,
-  //   },
-  // ];
+router.get('/', async function (req, res) {
+  try {
+    const currentUserId = req.query.currentUserId;
+    const unreadOnly = req.query.unreadOnly === 'true';
+    const conversationId = req.query.conversationId;
 
-  // const demoChatGroups = [
-  //   {
-  //     _id: 'group1',
-  //     groupName: 'Project Alpha',
-  //     members: [
-  //       { userId: '67e5223431c4f5a6cca2880f', seenAt: '2025-03-20T10:00:00Z' },
-  //       { userId: '67e51e7a31c4f5a6cca28572', seenAt: '2025-03-19T12:00:00Z' },
-  //       { userId: '67e51ee031c4f5a6cca2857e', seenAt: '2025-03-18T15:30:00Z' },
-  //     ],
-  //   },
-  //   {
-  //     _id: 'group2',
-  //     groupName: 'Friends Chat',
-  //     members: [
-  //       { userId: '67e5223431c4f5a6cca2880f', seenAt: '2025-03-20T09:30:00Z' },
-  //       { userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T11:00:00Z' },
-  //     ],
-  //   },
-  // ];
-
-  router.get('/', async function (req, res) {
-    try {
-        // Extract the currentUserId from the query parameters
-        const currentUserId = req.query.currentUserId;
-
-        if (!currentUserId) {
-          return res.status(400).json({ error: 'Missing currentUserId' });
-        }
-
-        // Find the messages for the given user Id
-        const messages = await messageModel.find({
-          $or: [
-            { senderId: currentUserId },
-            { 'recipients.userId': currentUserId }
-          ]
-        });
-
-        res.json(messages);
-    } catch (error) {
-        console.error("Error getting messages:", error);
-        res.status(500).send("Internal Server Error");
+    if (!currentUserId) {
+      return res.status(400).json({ error: 'Missing currentUserId' });
     }
+
+    let filter;
+
+    if (unreadOnly) {
+      // Only get messages where the recipient is currentUserId and seenAt is null/undefined
+      filter = {
+        'recipients': {
+          $elemMatch: {
+            userId: currentUserId,
+            seenAt: { $in: [null, undefined] }
+          }
+        }
+      };
+    } else {
+      // Get all messages where user is sender or recipient
+      filter = {
+        $or: [
+          { senderId: currentUserId },
+          { 'recipients.userId': currentUserId }
+        ]
+      };
+    }
+
+    // If conversationId is provided, add it to the filter
+    if (conversationId) {
+    filter = {
+      ...filter,
+      conversationId: conversationId,
+    };
+  }
+
+    const messages = await messageModel.find(filter);
+
+    res.json(messages);
+  } catch (error) {
+    console.error("Error getting messages:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get('/get-messages-for-conversation', async function (req, res) {
+  try {
+    const currentUserId = req.query.currentUserId;
+
+    if (!currentUserId) {
+      return res.status(400).json({ error: 'Missing currentUserId' });
+    }
+
+    let filter;
+
+    if (unreadOnly) {
+      // Only get messages where the recipient is currentUserId and seenAt is null/undefined
+      filter = {
+        'recipients': {
+          $elemMatch: {
+            userId: currentUserId,
+            seenAt: { $in: [null, undefined] }
+          }
+        }
+      };
+    } else {
+      // Get all messages where user is sender or recipient
+      filter = {
+        $or: [
+          { senderId: currentUserId },
+          { 'recipients.userId': currentUserId }
+        ]
+      };
+    }
+
+    const messages = await messageModel.find(filter);
+
+    res.json(messages);
+  } catch (error) {
+    console.error("Error getting messages:", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 router.get('/groups', async function (req, res) {
