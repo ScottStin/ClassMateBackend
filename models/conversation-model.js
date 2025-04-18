@@ -18,10 +18,10 @@ const conversationSchema = mongoose.Schema({
         messageText: { type: String, default: null },
         createdAt: { type: String, default: null },
     },
-    userTyping:{
+    usersTyping:[{
         type: String,
         required: false,
-    },
+    }],
 })
 
 module.exports = mongoose.model('conversationModel', conversationSchema);

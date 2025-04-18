@@ -17,7 +17,7 @@ router.get('/', async function (req, res) {
             participantIds: currentUserId,
         });
 
-        // For each conversation, fetch the most recent message
+        // For each conversation, fetch the most recent message // TODO - add this to a reusable function
         const populatedConversations = await Promise.all(
             conversations.map(async (conversation) => {
                 const recentMessage = await messageModel
@@ -52,8 +52,6 @@ router.post('/', async (req, res) => {
     await newConversation.save();
     res.status(201).json(newConversation);
 
-    console.log(newConversation)
-
     // Emit event to all connected clients after conversation is created
     if(newConversation.participantIds) {
       for(const participantId of newConversation.participantIds) {
@@ -67,5 +65,44 @@ router.post('/', async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+router.patch('/user-typing/:id', async (req, res) => {
+    try {
+      const conversationId = req.params.id;
+      const { isCurrentUserTyping, currentUserId } = req.body;
+  
+      let conversation = await conversationModel.findById(conversationId);
+      if (!conversation) {
+        return res.status(404).send("Conversation not found");
+      }
+  
+      const userTypingSet = new Set(conversation.usersTyping.map(id => id.toString()));
+  
+      if (isCurrentUserTyping) {
+        // Add user ID if it's not already in the array
+        userTypingSet.add(currentUserId.toString());
+      } else {
+        // Remove user ID if it's there
+        userTypingSet.delete(currentUserId.toString());
+      }
+  
+      // Convert back to array and save
+      conversation.usersTyping = Array.from(userTypingSet);
+      const updatedConversation = await conversation.save();
+      res.status(201).json(updatedConversation);
+
+    // Emit event to all connected clients after conversation is updated
+    if (updatedConversation.participantIds) {
+        for(const participantId of updatedConversation.participantIds) {
+          const io = getIo();
+          io.emit('conversationEvent-' + participantId, {action: 'userTyping', data: updatedConversation});
+        }
+    }
+
+    } catch (error) {
+      console.error("Error updating conversation typing status:", error);
+      res.status(500).send("Internal Server Error");
+    }
+  });
 
 module.exports = router;
