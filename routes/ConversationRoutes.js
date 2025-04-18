@@ -3,6 +3,9 @@ const router = express.Router();
 const { getIo } = require('../socket-io');
 const conversationModel = require('../models/conversation-model');
 const messageModel = require('../models/messenger-model');
+const { cloudinary, storage } = require('../cloudinary');
+const multer = require('multer');
+const upload = multer({ storage });
 
 router.get('/', async function (req, res) {
     try {
@@ -51,6 +54,35 @@ router.post('/', async (req, res) => {
     const newConversation = await conversationModel.create(req.body);
     await newConversation.save();
     res.status(201).json(newConversation);
+
+    // --- upload user photo to cloudinary:
+    if(newConversation.image && newConversation.url & newConversation.file) {
+        await cloudinary.uploader.upload(newConversation.image.url, {folder: `${req.body.schoolId}/message-group-images/${newConversation._id}`}, async (err, result)=>{
+        if (err) return console.log(err);  
+        newConversation.image = {url:result.url, fileName:result.public_id};
+        await newConversation.save();
+        })
+    }
+    
+    // add first message to group:
+    if(newConversation.groupName) {
+        const firstGroupMessage = {
+          conversationId: newConversation._id,
+          messageText: `${req.body.groupAdminName} created a new group.`,
+          createdAt: new Date(),
+          deleted: false,
+          recipients: newConversation.participantIds.filter((participantId) => participantId !== req.body.groupAdminId).map((participantId) => ({ userId: participantId })),
+          senderId: req.body.groupAdminId,
+      }
+      const newMessage = await messageModel.create(firstGroupMessage);
+      await newMessage.save();
+
+      newConversation.mostRecentMessage = {
+        senderId: newMessage.senderId,
+        messageText: newMessage.messageText,
+        createdAt: newMessage.createdAt,
+    };
+    }
 
     // Emit event to all connected clients after conversation is created
     if(newConversation.participantIds) {

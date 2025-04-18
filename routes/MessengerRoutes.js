@@ -91,41 +91,6 @@ router.get('/get-messages-for-conversation', async function (req, res) {
   }
 });
 
-router.get('/groups', async function (req, res) {
-  const demoChatGroups = [
-    {
-      _id: 'group1',
-      groupName: 'Project Alpha',
-      members: [
-        { userId: '67e5223431c4f5a6cca2880f', seenAt: '2025-03-20T10:00:00Z' },
-        { userId: '67e51e7a31c4f5a6cca28572', seenAt: '2025-03-19T12:00:00Z' },
-        { userId: '67e51ee031c4f5a6cca2857e', seenAt: '2025-03-18T15:30:00Z' },
-      ],
-    },
-    {
-      _id: 'group2',
-      groupName: 'Friends Chat',
-      members: [
-        { userId: '67e5223431c4f5a6cca2880f', seenAt: '2025-03-20T09:30:00Z' },
-        { userId: '67e917d713fc7fa0ca996c18', seenAt: '2025-03-19T11:00:00Z' },
-      ],
-    },
-  ];
-
-    try {
-        // Extract the currentUserId from the query parameters
-        const currentUserId = req.query.currentUserId;
-
-        const test = demoChatGroups.filter((group) =>
-            group.members.map((member) => member.userId).includes(currentUserId)
-          );
-        res.json(test);
-    } catch (error) {
-        console.error("Error getting message groups:", error);
-        res.status(500).send("Internal Server Error");
-    }
-});
-
 router.post('/new-message', async (req, res) => {
   try {
     const newMessage = await messageModel.create({...req.body, createdAt: new Date()});

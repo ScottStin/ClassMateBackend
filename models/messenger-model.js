@@ -22,13 +22,13 @@ const messageAttachmentSchema = new mongoose.Schema({
     },
 });
 
-const chatGroupSchema = new mongoose.Schema({
-    groupName: {
-        type: String,
-        required: true,
-    },
-    members: [messageRecipientsSchema],
-});
+// const chatGroupSchema = new mongoose.Schema({
+//     groupName: {
+//         type: String,
+//         required: true,
+//     },
+//     members: [messageRecipientsSchema],
+// });
 
 const messageSchema = new mongoose.Schema({
     messageText: {
@@ -78,136 +78,4 @@ const messageSchema = new mongoose.Schema({
     },
 });
 
-// const ChatGroup = mongoose.model('ChatGroup', chatGroupSchema);
 module.exports = mongoose.model('messageModel', messageSchema);
-
-// module.exports = {
-//     ChatGroup,
-//     messageModel,
-// };
-
-
-// DEMO EXAMPLE FROM NESTJS:
-
-// import { OmitType } from '@nestjs/mapped-types';
-// import { Expose, Type } from 'class-transformer';
-// import {
-//   IsBoolean,
-//   IsNotEmpty,
-//   IsOptional,
-//   IsString,
-//   ValidateNested,
-// } from 'class-validator';
-
-// export class MessageRecipinets {
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   userId: string;
-
-//   @IsString()
-//   @IsOptional()
-//   @Expose()
-//   seenAt?: string;
-// }
-
-// export class MessageAttachment {
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   url: string;
-
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   fileName: string;
-// }
-
-// export class ChatGroupDto {
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   _id: string;
-
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   groupName: string;
-
-//   @ValidateNested({ each: true })
-//   @Type(() => MessageRecipinets)
-//   @Expose()
-//   members: MessageRecipinets[];
-// }
-
-// export class CreateChatGroupDto extends OmitType(ChatGroupDto, ['_id']) {}
-
-// export class MessageDto {
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   _id: string;
-
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   messageText: string;
-
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   senderId: string;
-
-//   @ValidateNested({ each: true })
-//   @Type(() => MessageRecipinets)
-//   @IsOptional()
-//   @Expose()
-//   recipients?: MessageRecipinets[];
-
-//   @IsBoolean()
-//   @IsNotEmpty()
-//   @Expose()
-//   deleted: boolean;
-
-//   @IsBoolean()
-//   @IsNotEmpty()
-//   @Expose()
-//   edited: boolean;
-
-//   @ValidateNested()
-//   @Type(() => MessageAttachment)
-//   @IsOptional()
-//   @Expose()
-//   attachment?: MessageAttachment;
-
-//   @IsString()
-//   @IsOptional()
-//   @Expose()
-//   chatGroupId?: string;
-
-//   @IsString()
-//   @IsNotEmpty()
-//   @Expose()
-//   createdAt: string;
-
-//   @IsString()
-//   @IsOptional()
-//   @Expose()
-//   parentMessageId?: string;
-
-//   @IsString()
-//   @IsOptional()
-//   @Expose()
-//   savedByIds?: string[];
-
-//   @ValidateNested({ each: true })
-//   @Type(() => MessageDto)
-//   @IsOptional()
-//   @Expose()
-//   replies?: MessageDto[];
-// }
-
-// export class CreateMessageDto extends OmitType(MessageDto, [
-//   '_id',
-//   'createdAt',
-// ]) {}
