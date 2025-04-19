@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { getIo } = require('../socket-io'); // Import the getIo function
 const messageModel = require('../models/messenger-model');
+const conversationModel = require('../models/conversation-model');
 
 router.get('/', async function (req, res) {
   try {
@@ -98,10 +99,22 @@ router.post('/new-message', async (req, res) => {
     res.status(201).json(newMessage);
 
     // Emit event to all connected clients after message is created
+    const io = getIo();
     if(newMessage.recipients) {
       for(const recipient of newMessage.recipients.map((recipient) => recipient.userId)) {
-        const io = getIo(); // Safely get the initialized Socket.IO instance
         io.emit('messageEvent-' + recipient, {action: 'messageSent', data: newMessage});
+      }
+    }
+
+    const conversation = await conversationModel.findById(newMessage.conversationId)
+    if (conversation) {
+      conversation.mostRecentMessage = {
+        senderId: newMessage.senderId,
+        messageText: newMessage.messageText,
+        createdAt: newMessage.createdAt,
+      };
+      for(let participantId of conversation.participantIds) {
+        io.emit('conversationEvent-' + participantId, {action: 'updateGroup', data: conversation});
       }
     }
 
@@ -152,6 +165,10 @@ router.patch('/:id', async (req, res) => {
     if (!updatedMessage) {
       return res.status(404).json({ error: 'Message not found' });
     }
+    
+    if (updatedMessage.adminMessage === true) {
+      return res.status(404).json({ error: 'Cannot edit admin messages' });
+    }
 
     updatedMessage.messageText = req.body.messageText;
     updatedMessage.edited = new Date();
@@ -176,8 +193,13 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const deletedMessage = await messageModel.findById(req.params.id);
+    
     if (!deletedMessage) {
       return res.status(404).json({ message: 'Message not found' });
+    }
+
+    if (deletedMessage.adminMessage === true) {
+      return res.status(404).json({ error: 'Cannot delete admin messages' });
     }
 
     // Mark as deleted and clear unwanted fields

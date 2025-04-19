@@ -52,10 +52,10 @@ const messageSchema = new mongoose.Schema({
         required: false,
     },
     attachment: messageAttachmentSchema,
-    chatGroupId: {
-        type: String,
-        required: false,
-    },
+    // chatGroupId: {
+    //     type: String,
+    //     required: false,
+    // },
     conversationId: {
         type: String,
         required: false,
@@ -76,6 +76,10 @@ const messageSchema = new mongoose.Schema({
         type: [this], // Self-referencing array of messages (replies)
         default: [],
     },
+    adminMessage: {
+        type: Boolean,
+        required: false,
+    }, // note admin messages are things like 'John started a new group' or 'John invited you to join a group'. These cannot be deleted or edited.
 });
 
 module.exports = mongoose.model('messageModel', messageSchema);

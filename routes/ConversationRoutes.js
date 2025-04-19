@@ -3,6 +3,7 @@ const router = express.Router();
 const { getIo } = require('../socket-io');
 const conversationModel = require('../models/conversation-model');
 const messageModel = require('../models/messenger-model');
+const userModel = require('../models/user-models');
 const { cloudinary, storage } = require('../cloudinary');
 const multer = require('multer');
 const upload = multer({ storage });
@@ -73,6 +74,7 @@ router.post('/', async (req, res) => {
           deleted: false,
           recipients: newConversation.participantIds.filter((participantId) => participantId !== req.body.groupAdminId).map((participantId) => ({ userId: participantId })),
           senderId: req.body.groupAdminId,
+          adminMessage: true,
       }
       const newMessage = await messageModel.create(firstGroupMessage);
       await newMessage.save();
@@ -94,6 +96,141 @@ router.post('/', async (req, res) => {
 
   } catch (error) {
     console.error("Error creating new conversation:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/update-group/:id', async (req, res) => {
+  try {
+    const io = getIo();
+    const updatedGroup = await conversationModel.findById(req.params.id);
+
+    if (!updatedGroup) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    
+    // Get list of group member ids before update:
+    const previousParticipantIds = updatedGroup.participantIds.map(id => id.toString());
+    const previousGroupName = updatedGroup.groupName;
+
+    // Get new list of participantIds from request
+    const newParticipantIds = req.body.participantIds.map(id => id.toString());
+
+    // Find added and removed participants
+    const addedParticipants = newParticipantIds.filter(id => !previousParticipantIds.includes(id));
+    const removedParticipants = previousParticipantIds.filter(id => !newParticipantIds.includes(id));
+
+    // Log or handle them as needed
+    console.log('Added Participants:', addedParticipants);
+    console.log('Removed Participants:', removedParticipants);
+
+    // update group:
+    updatedGroup.participantIds = req.body.participantIds;
+    updatedGroup.groupName = req.body.groupName;
+
+    const newMessage = [];
+
+    // add  message to group that users were added/removed:
+    for(let addedParticipantId of addedParticipants) {
+      const user = await userModel.findById(addedParticipantId);
+
+      const newGroupMessage = {
+        conversationId: updatedGroup._id,
+        messageText: `${req.body.groupAdminName} added ${user?.name ?? "a user"} to this group.`,
+        createdAt: new Date(),
+        deleted: false,
+        recipients: updatedGroup.participantIds.filter((participantId) => participantId !== req.body.groupAdminId).map((participantId) => ({ userId: participantId })),
+        senderId: req.body.groupAdminId,
+        adminMessage: true,
+      }
+
+      newMessage.push(newGroupMessage)
+  
+      updatedGroup.mostRecentMessage = {
+        senderId: newMessage.senderId,
+        messageText: newMessage.messageText,
+        createdAt: newMessage.createdAt,
+      };
+    }
+  
+    for(let removedParticipantId of removedParticipants) {
+      const user = await userModel.findById(removedParticipantId);
+  
+      const newGroupMessage = {
+        conversationId: updatedGroup._id,
+        messageText: `${req.body.groupAdminName} removed ${user?.name ?? "a user"} from this group.`,
+        createdAt: new Date(),
+        deleted: false,
+        recipients: updatedGroup.participantIds.filter((participantId) => participantId !== req.body.groupAdminId).map((participantId) => ({ userId: participantId })),
+        senderId: req.body.groupAdminId,
+        adminMessage: true,
+      }
+
+      newMessage.push(newGroupMessage)
+
+      updatedGroup.mostRecentMessage = {
+        senderId: newMessage.senderId,
+        messageText: newMessage.messageText,
+        createdAt: newMessage.createdAt,
+      };
+    }
+
+    if(previousGroupName !== req.body.groupName) {
+      const newGroupMessage = {
+        conversationId: updatedGroup._id,
+        messageText: `${req.body.groupAdminName} changed the group name from ${previousGroupName} to ${req.body.groupName}`,
+        createdAt: new Date(),
+        deleted: false,
+        recipients: updatedGroup.participantIds.filter((participantId) => participantId !== req.body.groupAdminId).map((participantId) => ({ userId: participantId })),
+        senderId: req.body.groupAdminId,
+        adminMessage: true,
+      }
+
+      newMessage.push(newGroupMessage)
+
+      updatedGroup.mostRecentMessage = {
+        senderId: newMessage.senderId,
+        messageText: newMessage.messageText,
+        createdAt: newMessage.createdAt,
+      };
+    }
+
+    // --- upload user photo to cloudinary:
+    // if(updatedGroup.image && updatedGroup.url & updatedGroup.file) {
+    //   await cloudinary.uploader.upload(updatedGroup.image.url, {folder: `${req.body.schoolId}/message-group-images/${updatedGroup._id}`}, async (err, result)=>{
+    //   if (err) return console.log(err);  
+    //   updatedGroup.image = {url:result.url, fileName:result.public_id};
+    //   await updatedGroup.save();
+    //   })
+    // }
+  
+    await updatedGroup.save();
+    res.status(201).json(updatedGroup);
+
+    // Emit event to all connected clients after conversation is updated
+    if(updatedGroup.participantIds) {
+      for(const participantId of updatedGroup.participantIds) {
+        io.emit('conversationEvent-' + participantId, {action: 'updateGroup', data: updatedGroup});
+      }
+    }
+
+    // save the new messages that were created previously:
+    for(let message of newMessage) {
+      const saveMessage = await messageModel.create(message);
+      await saveMessage.save();
+      for(const participantId of updatedGroup.participantIds) {
+        io.emit('messageEvent-' + participantId, {action: 'messageSent', data: saveMessage});
+      }
+    }
+
+    // Emit event to all removed members after conversation is updated
+    if(removedParticipants) {
+      for(const removedParticipant of removedParticipants) {
+        io.emit('conversationEvent-' + removedParticipant, {action: 'updateGroup', data: updatedGroup});
+      }
+    }
+  } catch (error) {
+    console.error("Error updating new message:", error);
     res.status(500).send("Internal Server Error");
   }
 });
