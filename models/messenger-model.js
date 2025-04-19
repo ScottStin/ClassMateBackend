@@ -79,7 +79,7 @@ const messageSchema = new mongoose.Schema({
     adminMessage: {
         type: Boolean,
         required: false,
-    }, // note admin messages are things like 'John started a new group' or 'John invited you to join a group'. These cannot be deleted or edited.
+    }, // note - admin messages are things like 'John started a new group' or 'John invited you to join a group'. These cannot be deleted or edited.
 });
 
 module.exports = mongoose.model('messageModel', messageSchema);

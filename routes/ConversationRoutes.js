@@ -57,12 +57,11 @@ router.post('/', async (req, res) => {
     res.status(201).json(newConversation);
 
     // --- upload user photo to cloudinary:
-    if(newConversation.image && newConversation.url & newConversation.file) {
-        await cloudinary.uploader.upload(newConversation.image.url, {folder: `${req.body.schoolId}/message-group-images/${newConversation._id}`}, async (err, result)=>{
-        if (err) return console.log(err);  
-        newConversation.image = {url:result.url, fileName:result.public_id};
-        await newConversation.save();
-        })
+
+    if(newConversation.image && newConversation.image.url) {
+      const image = await cloudinary.uploader.upload(req.body.image.url, { folder: `${req.body.schoolId}/message-group-images` });
+      newConversation.image = { url: image.url, fileName: image.public_id };
+      await newConversation.save();
     }
     
     // add first message to group:
@@ -119,10 +118,6 @@ router.patch('/update-group/:id', async (req, res) => {
     // Find added and removed participants
     const addedParticipants = newParticipantIds.filter(id => !previousParticipantIds.includes(id));
     const removedParticipants = previousParticipantIds.filter(id => !newParticipantIds.includes(id));
-
-    // Log or handle them as needed
-    console.log('Added Participants:', addedParticipants);
-    console.log('Removed Participants:', removedParticipants);
 
     // update group:
     updatedGroup.participantIds = req.body.participantIds;
@@ -270,6 +265,42 @@ router.patch('/user-typing/:id', async (req, res) => {
 
     } catch (error) {
       console.error("Error updating conversation typing status:", error);
+      res.status(500).send("Internal Server Error");
+    }
+  });
+
+  router.delete('/delete-group/:id', async (req, res) => {
+    try {
+      const deletedGroup = await conversationModel.findByIdAndDelete(req.params.id);
+  
+      if (!deletedGroup) {
+        return res.status(404).json({ message: "Group not found" });
+      }
+  
+      // --- Delete group image from Cloudinary if it exists
+      if (deletedGroup.image?.fileName) {
+        try {
+          await cloudinary.uploader.destroy(deletedGroup.image.fileName);
+        } catch (err) {
+          console.error('Error deleting group image from Cloudinary:', err);
+        }
+      }
+  
+      // --- Delete all messages associated with this group
+      await messageModel.deleteMany({ conversationId: deletedGroup._id });
+  
+      res.status(200).json(deletedGroup);
+
+      // Emit event to all connected clients after conversation is deleted
+      if (deletedGroup.participantIds) {
+          for(const participantId of deletedGroup.participantIds) {
+            const io = getIo();
+            io.emit('conversationEvent-' + participantId, {action: 'deleteGroup', data: deletedGroup});
+          }
+      }
+  
+    } catch (error) {
+      console.error("Error deleting Group:", error);
       res.status(500).send("Internal Server Error");
     }
   });
