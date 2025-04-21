@@ -96,9 +96,6 @@ router.get('/get-unread-for-all-conversations', async function (req, res) {
   try {
     const currentUserId = req.query.currentUserId;
 
-    console.log('currentUserId')
-    console.log(currentUserId)
-
     if (!currentUserId) {
       return res.status(400).json({ error: 'Missing currentUserId query param' });
     }
@@ -108,15 +105,7 @@ router.get('/get-unread-for-all-conversations', async function (req, res) {
       participantIds: currentUserId,
     }).select('_id');
 
-    console.log('conversations')
-    console.log(conversations)
-
     const conversationIds = conversations.map(conv => conv._id.toString());
-
-
-    console.log('conversationIds')
-    console.log(conversationIds)
-
 
     // Get all messages in those conversations
     const allMessages = await messageModel.find({
@@ -124,16 +113,10 @@ router.get('/get-unread-for-all-conversations', async function (req, res) {
       deleted: false
     });
 
-    console.log('allMessages')
-    console.log(allMessages)
-
     // Filter messages that have currentUserId as recipient with unseen status
     const unreadMessages = allMessages.filter(msg => {
       return msg.recipients.some(r => r.userId === currentUserId && !r.seenAt);
     });
-
-    console.log('unreadMessages')
-    console.log(unreadMessages)
 
     res.json(unreadMessages);
   } catch (error) {
