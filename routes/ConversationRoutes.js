@@ -103,6 +103,7 @@ router.patch('/update-group/:id', async (req, res) => {
   try {
     const io = getIo();
     const updatedGroup = await conversationModel.findById(req.params.id);
+    const originalImage = { ...updatedGroup.image };
 
     if (!updatedGroup) {
       return res.status(404).json({ error: 'Group not found' });
@@ -189,17 +190,21 @@ router.patch('/update-group/:id', async (req, res) => {
         createdAt: newMessage.createdAt,
       };
     }
-
-    // --- upload user photo to cloudinary:
-    // if(updatedGroup.image && updatedGroup.url & updatedGroup.file) {
-    //   await cloudinary.uploader.upload(updatedGroup.image.url, {folder: `${req.body.schoolId}/message-group-images/${updatedGroup._id}`}, async (err, result)=>{
-    //   if (err) return console.log(err);  
-    //   updatedGroup.image = {url:result.url, fileName:result.public_id};
-    //   await updatedGroup.save();
-    //   })
-    // }
   
     await updatedGroup.save();
+
+    // --- upload user photo to cloudinary:
+    if(req.body.image?.url) {
+      const image = await cloudinary.uploader.upload(req.body.image.url, { folder: `${req.body.schoolId}/message-group-images` });
+      updatedGroup.image = { url: image.url, fileName: image.public_id };
+      await updatedGroup.save();
+
+      try {
+        await cloudinary.uploader.destroy(originalImage.fileName);
+      } catch (err) {
+        console.error('Error deleting group image from Cloudinary:', err);
+      }
+    }
     res.status(201).json(updatedGroup);
 
     // Emit event to all connected clients after conversation is updated
