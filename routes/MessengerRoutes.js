@@ -92,6 +92,56 @@ router.get('/get-messages-for-conversation', async function (req, res) {
   }
 });
 
+router.get('/get-unread-for-all-conversations', async function (req, res) {
+  try {
+    const currentUserId = req.query.currentUserId;
+
+    console.log('currentUserId')
+    console.log(currentUserId)
+
+    if (!currentUserId) {
+      return res.status(400).json({ error: 'Missing currentUserId query param' });
+    }
+
+    // Get all conversations where current user is a participant
+    const conversations = await conversationModel.find({
+      participantIds: currentUserId,
+    }).select('_id');
+
+    console.log('conversations')
+    console.log(conversations)
+
+    const conversationIds = conversations.map(conv => conv._id.toString());
+
+
+    console.log('conversationIds')
+    console.log(conversationIds)
+
+
+    // Get all messages in those conversations
+    const allMessages = await messageModel.find({
+      conversationId: { $in: conversationIds },
+      deleted: false
+    });
+
+    console.log('allMessages')
+    console.log(allMessages)
+
+    // Filter messages that have currentUserId as recipient with unseen status
+    const unreadMessages = allMessages.filter(msg => {
+      return msg.recipients.some(r => r.userId === currentUserId && !r.seenAt);
+    });
+
+    console.log('unreadMessages')
+    console.log(unreadMessages)
+
+    res.json(unreadMessages);
+  } catch (error) {
+    console.error("Error getting messages:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.post('/new-message', async (req, res) => {
   try {
     const newMessage = await messageModel.create({...req.body, createdAt: new Date()});
@@ -151,7 +201,7 @@ router.patch('/mark-as-seen', async (req, res) => {
     await Promise.all(updatePromises);
 
     // Respond with success
-    res.status(200).json({ message: 'Messages marked as seen' });
+    res.status(200).json(messages);
   } catch (error) {
     console.error('Error marking messages as seen:', error);
     res.status(500).json({ error: 'Failed to mark messages as seen' });
