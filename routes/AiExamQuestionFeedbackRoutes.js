@@ -458,11 +458,17 @@ const openai = new OpenAI({
    * This generates ai feedback for multi choice:
    */
   router.post("/generate-ai-exam-feedback/multi-choice", async (req, res) => {
-    const { text, prompt, multiChoiceOptions } = req.body;
+    console.log('hit1');
+    const { text, prompt, multiChoiceOptions, mediaPrompt1, mediaPrompt2, mediaPrompt3 } = req.body;
 
     if (!text || !prompt || !multiChoiceOptions) {
       return res.status(400).json({ error: "Text, prompt and options are required" });
     }
+
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
+    const hasMediaPrompts = mediaPrompt1Text || mediaPrompt2Text || mediaPrompt3Text;
 
     // generate prompts as string:
     const multiChoiceOptionsString = multiChoiceOptions
@@ -475,13 +481,8 @@ const openai = new OpenAI({
         .map(opt => `${opt.index}) ${opt.text}`)
         .join(', ');
 
-    const studentAnswer = multiChoiceOptions.find((option) => option._id === text).text
-
-    console.log('hit1');
-    console.log(prompt);
-    console.log(multiChoiceOptionsString);
-    console.log(multiChoiceOptionsStringCorrectOnly);
-    console.log(studentAnswer);
+    const studentAnswer = multiChoiceOptions.filter((option) => text.split(',').includes(option._id))
+    const studentAnswerText = studentAnswer.map((answer) => answer.text).join(', ');
 
     try {
   
@@ -500,7 +501,7 @@ const openai = new OpenAI({
   
         Here are the student's answer(s):
   
-        "${studentAnswer}"
+        "${studentAnswerText}"
   
         Provide detailed feedback for the student. If they were correct, praise them and reiterate why it was correct (e.g. confirm the applicable English language rules etc.). If they were incorrect or partially correct, let them know what the correct response was and why, and consider why they may have chosen their response and explain why their response isn't correct (e.g. explain English language rules).
   
@@ -510,6 +511,12 @@ const openai = new OpenAI({
         {
           "feedback": "Your detailed feedback here",
         }
+
+        ${hasMediaPrompts ? `In addition, the student was also given the following media prompts (note audios have been conversted to text):
+
+        ${mediaPrompt1Text ?? ''}
+        ${mediaPrompt2Text ?? ''}
+        ${mediaPrompt3Text ?? ''}` : ''}
       `;
 
       const completion = await openai.chat.completions.create({
@@ -536,9 +543,6 @@ const openai = new OpenAI({
         // Separate feedback and score
         const feedback = result.feedback;
     
-        console.log('done')
-        console.log(feedback)
-
         // Send the response with feedback and score as separate objects
         res.json({ feedback });
 
@@ -547,7 +551,18 @@ const openai = new OpenAI({
       console.error("Error:", error.message);
       res.status(500).json({ error: "Failed to process feedback. Please try again later." });
 
-    }
+    } 
+    // finally {
+    //     // Clean up temporary file
+    //     try {
+    //       if (fs.existsSync(tempFilePath)) {
+    //         fs.unlinkSync(tempFilePath);
+    //         console.log("Temporary audio file deleted.");
+    //       }
+    //     } catch (cleanupError) {
+    //       console.error("Failed to delete temporary file:", cleanupError.message);
+    //     }
+    //   }
   });
 
 module.exports = router;

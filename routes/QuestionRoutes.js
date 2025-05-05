@@ -95,13 +95,52 @@ router.patch('/submit-exam/:id', async function (req, res) {
 
                     // -- If student's exam is a multichoice single answer, applying the marking immediately:
                     if (['multiple-choice-single'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.multipleChoiceQuestionList) {
-                      const studentResponseMultiChoice = submittedStudentResponse.response
-                      const correctAnswerId = foundQuestion.multipleChoiceQuestionList.find((option) => option.correct === true)._id.toString()
+                      const studentResponseMultiChoice = submittedStudentResponse.response;
+                      const correctAnswerId = foundQuestion.multipleChoiceQuestionList.find((option) => option.correct === true)._id.toString();
 
                       if(correctAnswerId !== studentResponseMultiChoice) {
                         submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin }
                       } else {
                         submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax }
+                      }
+                    }
+
+                    // -- If student's exam is a multichoice multi  answer, applying the marking immediately:
+                    if (['multiple-choice-multi'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.multipleChoiceQuestionList) {
+                      const studentResponsesMultiChoice = submittedStudentResponse.response.split(',');
+                      const correctAnswerId = foundQuestion.multipleChoiceQuestionList.filter((option) => option.correct === true).map((answer) => answer._id);
+                      const correctAnswerIdStrings = correctAnswerId.map(id => id.toString());
+
+                      // if partial marking:
+                      if (submittedQuestion.partialMarking === true) {
+                        let rawStudentMark = 0;
+                        const rawTotalMark = correctAnswerIdStrings.length;
+
+                        studentResponsesMultiChoice.forEach(response => {
+                            if (correctAnswerIdStrings.includes(response)) {
+                              rawStudentMark += 1; // for every repsonse a student got correct, they given 1 point
+                            } else {
+                              rawStudentMark -= 1; // for every reponse a student got incorrect, they lose a point
+                            }
+                        });
+
+                        // if student got zero or less points, give them the minimum score:
+                        if(rawStudentMark <= 0) {
+                        submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin }
+                        } 
+
+                        // otherwise, give the student the correct adjusted score:
+                        else {
+                            submittedStudentResponse.mark = { totalMark: (foundQuestion.totalPointsMax / rawTotalMark * rawStudentMark) }
+                        }
+                      }
+                      // if  not partial marking, student must get all questions right to score:
+                      else {
+                        if(studentResponsesMultiChoice.length === correctAnswerIdStrings.length && studentResponsesMultiChoice.every((ans) => correctAnswerIdStrings.includes(ans))) {
+                            submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
+                        } else {
+                            submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
+                        }
                       }
                     }
 
