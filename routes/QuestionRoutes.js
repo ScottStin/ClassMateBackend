@@ -126,7 +126,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
 
                         // if student got zero or less points, give them the minimum score:
                         if(rawStudentMark <= 0) {
-                        submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin }
+                            submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin }
                         } 
 
                         // otherwise, give the student the correct adjusted score:
@@ -137,6 +137,38 @@ router.patch('/submit-exam/:id', async function (req, res) {
                       // if  not partial marking, student must get all questions right to score:
                       else {
                         if(studentResponsesMultiChoice.length === correctAnswerIdStrings.length && studentResponsesMultiChoice.every((ans) => correctAnswerIdStrings.includes(ans))) {
+                            submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
+                        } else {
+                            submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
+                        }
+                      }
+                    }
+
+                    // -- If student's exam is a reorder sentence, applying the marking immediately:
+                    if (['reorder-sentence'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.reorderSentenceQuestionList) {
+                      const delimiter = '\u241E';
+                      const correctOrder = foundQuestion.reorderSentenceQuestionList.map((option) => option.text);
+                      const studentAnswerOrder = submittedStudentResponse.response.split(delimiter);
+
+                      // if partial marking, give the user points for each array item in the correct order:
+                      if (submittedQuestion.partialMarking === true) {
+                        if (correctOrder.length !== studentAnswerOrder.length) {
+                            throw new Error("Arrays must be of the same length.");
+                        }
+
+                        let rawStudentMark = 0;
+                        const rawTotalMark = correctOrder.length;
+
+                        for (let i = 0; i < correctOrder.length; i++) {
+                            if (correctOrder[i] === studentAnswerOrder[i]) {
+                            rawStudentMark++;
+                            }
+                        }
+                        submittedStudentResponse.mark = { totalMark: (foundQuestion.totalPointsMax / rawTotalMark * rawStudentMark) }
+                      }
+                      // if  not partial marking, student must get all questions right to score:
+                      else {
+                        if(correctOrder.join(delimiter) === studentAnswerOrder.join(delimiter)) {
                             submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
                         } else {
                             submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
