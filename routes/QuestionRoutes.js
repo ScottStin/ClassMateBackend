@@ -176,6 +176,33 @@ router.patch('/submit-exam/:id', async function (req, res) {
                       }
                     }
 
+                    // -- If student's exam is a match option , applying the marking immediately:
+                    if (['match-options'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.matchOptionQuestionList) {  
+                        const studentAnswers = JSON.parse(submittedStudentResponse.response);
+
+                        // if partial marking, give the user points for each array item in the correct order:
+                        if (submittedQuestion.partialMarking === true) {
+
+                            let rawStudentMark = 0;
+                            const rawTotalMark = studentAnswers.length;
+
+                            for (const answer of studentAnswers) {
+                                if (answer.leftOption.id === answer.rightOption.id) {
+                                    rawStudentMark++;
+                                }
+                            }
+                            submittedStudentResponse.mark = { totalMark: (foundQuestion.totalPointsMax / rawTotalMark * rawStudentMark) }
+                        }
+                        // if  not partial marking, student must get all questions right to score:
+                        else {
+                            if(studentAnswers.every(item => item.leftOption.id === item.rightOption.id)) {
+                                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
+                            } else {
+                                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
+                            }
+                        }
+                    }
+
                     // -- Set studentResponse to an empty array if it's undefined, else save
                     if(foundQuestion.studentResponse === undefined || foundQuestion.studentResponse === null) {
                         foundQuestion.studentResponse = [submittedStudentResponse];

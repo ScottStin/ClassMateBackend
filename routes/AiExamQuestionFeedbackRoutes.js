@@ -660,4 +660,95 @@ const openai = new OpenAI({
     //   }
   });
 
+  /**
+   * This generates ai feedback for match options:
+   */
+  router.post("/generate-ai-exam-feedback/match-options", async (req, res) => {
+    const { text, prompt, matchOptionQuestionList, mediaPrompt1, mediaPrompt2, mediaPrompt3 } = req.body;
+
+    if (!text || !prompt || !matchOptionQuestionList) {
+      return res.status(400).json({ error: "Text, prompt and options are required" });
+    }
+
+
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
+    const hasMediaPrompts = mediaPrompt1Text || mediaPrompt2Text || mediaPrompt3Text;
+
+    try {
+  
+      const aiPrompt = `
+        You are an English teacher. Your student has been given a lift of words/sentences in a left column (leftOptions) and a list of matching words/sentences on a right column (rightOptions). They were tasked with matching the rightOptions to the leftOptions.
+
+        They were given this prompt for context: ${prompt}.
+
+        Here are how they matched the options:
+
+        ${text}.
+  
+        If the id of the leftOption matches the id of the rightOption, they got the pairing correct. If the ids do not match, however, they got the pairing incorrect.
+  
+        Provide detailed feedback for the student. If they were correct, praise them and reiterate why it was correct (e.g. confirm the applicable English language rules etc.). If they were incorrect or partially correct, let them know what the correct response was and why, and consider why they may have chosen their response and explain why their response isn't correct (e.g. explain English language rules).
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 300 words (though you can use less if need be).
+  
+        Return the feedback as an object. For example:
+        {
+          "feedback": "Your detailed feedback here",
+        }
+
+        ${hasMediaPrompts ? `In addition, the student was also given the following media prompts (note audios have been converted to text):
+
+        ${mediaPrompt1Text ?? ''}
+        ${mediaPrompt2Text ?? ''}
+        ${mediaPrompt3Text ?? ''}` : ''}
+      `;
+
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        if(!aiResponse) {
+            return res.json({ feedback: 'Error generating ai feedback1' });
+        }
+
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        if(!result?.feedback) {
+            return res.json({ feedback: 'Error generating ai feedback2' });
+        }
+
+        // Separate feedback and score
+        const feedback = result.feedback;
+    
+        // Send the response with feedback and score as separate objects
+        res.json({ feedback });
+
+    } catch (error) {
+
+      console.error("Error:", error.message);
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
+    } 
+    // finally {
+    //     // Clean up temporary file
+    //     try {
+    //       if (fs.existsSync(tempFilePath)) {
+    //         fs.unlinkSync(tempFilePath);
+    //         console.log("Temporary audio file deleted.");
+    //       }
+    //     } catch (cleanupError) {
+    //       console.error("Failed to delete temporary file:", cleanupError.message);
+    //     }
+    //   }
+  });
+
 module.exports = router;
