@@ -480,7 +480,7 @@ const openai = new OpenAI({
         .map(opt => `${opt.index}) ${opt.text}`)
         .join(', ');
 
-    const studentAnswer = multiChoiceOptions.filter((option) => text.split(',').includes(option._id))
+    const studentAnswer = multiChoiceOptions.filter((option) => JSON.parse(text).includes(option._id))
     const studentAnswerText = studentAnswer.map((answer) => answer.text).join(', ');
 
     try {
@@ -569,7 +569,6 @@ const openai = new OpenAI({
    */
   router.post("/generate-ai-exam-feedback/reorder-sentence", async (req, res) => {
     const { text, prompt, reorderSentenceQuestionList, mediaPrompt1, mediaPrompt2, mediaPrompt3 } = req.body;
-    const delimiter = '\u241E';
 
     if (!text || !prompt || !reorderSentenceQuestionList) {
       return res.status(400).json({ error: "Text, prompt and options are required" });
@@ -581,7 +580,7 @@ const openai = new OpenAI({
     const hasMediaPrompts = mediaPrompt1Text || mediaPrompt2Text || mediaPrompt3Text;
 
     const correctOrder = reorderSentenceQuestionList.map((item, index) => `${index + 1}. ${item.text}`).join(' ');
-    const studentOrder = text.split(delimiter).map((item, index) => `${index + 1}. ${item}`).join(' ');
+    const studentOrder = JSON.parse(text).map((item, index) => `${index + 1}. ${item}`).join(' ');
 
     try {
   

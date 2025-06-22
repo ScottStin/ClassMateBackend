@@ -95,9 +95,9 @@ router.patch('/submit-exam/:id', async function (req, res) {
 
                     // -- If student's exam is a multichoice single answer, applying the marking immediately:
                     if (['multiple-choice-single'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.multipleChoiceQuestionList) {
-                      const studentResponseMultiChoice = submittedStudentResponse.response;
+                      const studentResponseMultiChoice = JSON.parse(submittedStudentResponse.response)[0];
                       const correctAnswerId = foundQuestion.multipleChoiceQuestionList.find((option) => option.correct === true)._id.toString();
-
+                      
                       if(correctAnswerId !== studentResponseMultiChoice) {
                         submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin }
                       } else {
@@ -107,7 +107,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
 
                     // -- If student's exam is a multichoice multi  answer, applying the marking immediately:
                     if (['multiple-choice-multi'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.multipleChoiceQuestionList) {
-                      const studentResponsesMultiChoice = submittedStudentResponse.response.split(',');
+                      const studentResponsesMultiChoice = JSON.parse(submittedStudentResponse.response);
                       const correctAnswerId = foundQuestion.multipleChoiceQuestionList.filter((option) => option.correct === true).map((answer) => answer._id);
                       const correctAnswerIdStrings = correctAnswerId.map(id => id.toString());
 
@@ -146,9 +146,8 @@ router.patch('/submit-exam/:id', async function (req, res) {
 
                     // -- If student's exam is a reorder sentence, applying the marking immediately:
                     if (['reorder-sentence'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.reorderSentenceQuestionList) {
-                      const delimiter = '\u241E';
                       const correctOrder = foundQuestion.reorderSentenceQuestionList.map((option) => option.text);
-                      const studentAnswerOrder = submittedStudentResponse.response.split(delimiter);
+                      const studentAnswerOrder = JSON.parse(submittedStudentResponse.response);
 
                       // if partial marking, give the user points for each array item in the correct order:
                       if (submittedQuestion.partialMarking === true) {
@@ -168,7 +167,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                       }
                       // if  not partial marking, student must get all questions right to score:
                       else {
-                        if(correctOrder.join(delimiter) === studentAnswerOrder.join(delimiter)) {
+                        if(JSON.stringify(correctOrder) === JSON.stringify(studentAnswerOrder)) {
                             submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
                         } else {
                             submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
