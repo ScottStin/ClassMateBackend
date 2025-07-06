@@ -50,13 +50,23 @@ router.post('/', async (req, res) => {
     const createdSchool = await newSchool.save();
 
     // Logo upload
-    if (req.body.logo) {
+    if (req.body.logoPrimary) {
       try {
-        const result = await cloudinary.uploader.upload(req.body.logo.url, { folder: 'Class E' });
-        newSchool.logo = { url: result.url, filename: result.public_id };
+        const result = await cloudinary.uploader.upload(req.body.logoPrimary.url, { folder: 'Class E' });
+        newSchool.logoPrimary = { url: result.url, filename: result.public_id };
         await newSchool.save();
       } catch (error) {
-        console.error("Error uploading logo to Cloudinary:", error);
+        console.error("Error uploading primary school logo to Cloudinary:", error);
+      }
+    }
+
+    if (req.body.logoSecondary) {
+      try {
+        const result = await cloudinary.uploader.upload(req.body.logoSecondary.url, { folder: 'Class E' });
+        newSchool.logoSecondary = { url: result.url, filename: result.public_id };
+        await newSchool.save();
+      } catch (error) {
+        console.error("Error uploading secondary school logo to Cloudinary:", error);
       }
     }
 
@@ -69,7 +79,7 @@ router.post('/', async (req, res) => {
           schoolId: createdSchool._id,
           email: req.body.email,
           hashedPassword: hashedPassword,
-          profilePicture: newSchool.logo ? newSchool.logo : null 
+          profilePicture: newSchool.logoPrimary ?? null 
         }
         const newUser = await new userModel(userDetails);
         const createdUser = await newUser.save();
@@ -126,7 +136,7 @@ router.patch('/:id', async (req, res) => {
             $set: {
               name: req.body.name,
               email: req.body.email,
-              profilePicture: updatedSchool.logo ? updatedSchool.logo : null
+              profilePicture: updatedSchool.logoPrimary ?? null
             }
           },
           { new: true }

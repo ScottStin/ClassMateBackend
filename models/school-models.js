@@ -19,7 +19,11 @@ const schoolSchema = mongoose.Schema({
     hashedPassword:{
         type: String,
     },
-    logo:{
+    logoPrimary:{
+        url:String,
+        filename:String
+    },
+    logoSecondary:{
         url:String,
         filename:String
     },
@@ -33,6 +37,12 @@ const schoolSchema = mongoose.Schema({
         type: { type: String, default: null },
     },
     primaryButtonBackgroundColor:{
+        type: String,
+    },
+    warnColor:{
+        type: String,
+    },
+    errorColor:{
         type: String,
     },
     primaryButtonTextColor:{
