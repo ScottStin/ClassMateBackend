@@ -192,6 +192,7 @@ const homeworkRouter = require('./routes/HomeworkRoute');
 const notificationRouter = require('./routes/NotificationRoutes');
 const messengerRouter = require('./routes/MessengerRoutes');
 const conversationRouter = require('./routes/ConversationRoutes');
+const aiExamQuestionFeedbackRouter = require('./routes/AiExamQuestionFeedbackRoutes');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -203,6 +204,7 @@ app.use('/homework', homeworkRouter);
 app.use('/notifications', notificationRouter);
 app.use('/messages', messengerRouter);
 app.use('/conversations', conversationRouter);
+app.use('/ai-feedback', aiExamQuestionFeedbackRouter);
 
 /**
  * ==============================
