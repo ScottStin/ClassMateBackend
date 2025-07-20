@@ -45,6 +45,30 @@ router.post('/new', async (req, res) => {
   }
 });
 
+router.patch('/update/:id', async (req, res) => {
+  try {
+    console.log(req.body);
+    const lesson = await lessonModel.findById(req.params.id);
+  
+    if (!lesson) {
+      return res.status(404).json('Lesson not found');
+    }
+    Object.assign(lesson, req.body);
+
+    const updatedLesson = await lesson.save();
+
+    res.status(200).json(updatedLesson);
+
+    // emit socket event for update:
+    const io = getIo(); // Safely get the initialized Socket.IO instance
+    io.emit('lessonEvent-' +  updatedLesson.schoolId, {action: 'lessonUpdated', data: updatedLesson});
+
+  } catch (error) {
+    console.error("Error updating lesson:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.patch('/register/:id', async (req, res) => {
   try {
     const lesson = await lessonModel.findById(req.params.id);
