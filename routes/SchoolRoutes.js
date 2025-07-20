@@ -23,6 +23,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/current/:id', async (req, res) => {
+  try {
+    const school = await schoolModel.findById(req.params.id);
+    if (!school) {
+      return res.status(404).json('School not found');
+    }
+    res.json(school);
+  } catch (error) {
+    console.error("Error getting current school:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 /**
  * ==============================
  *  Create new school:
