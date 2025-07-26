@@ -222,7 +222,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                             const student = studentAnswers[i];
                             const correct = correctAnswers[i];
 
-                            if (student && correct && student.trim().toLowerCase() === correct.trim().toLowerCase()) {
+                            if (student && correct && correct.split(';').map(item => item.trim()).includes(student.trim())) {
                                 rawStudentMark += 1;
                             }
                             }
@@ -230,10 +230,38 @@ router.patch('/submit-exam/:id', async function (req, res) {
                         }
                         // if  not partial marking, student must get all questions right to score:
                         else {
-                            if(studentAnswers === correctAnswers) {
-                                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers correct
+                            let allCorrect = true;
+
+                            for (let i = 0; i < rawTotalMark; i++) {
+                                const student = studentAnswers[i];
+                                const correct = correctAnswers[i];
+
+                                const correctOptions = correct
+                                    ?.split(';')
+                                    .map(item => item.trim());
+
+                                const isCorrect = student &&
+                                    correct &&
+                                    correctOptions?.some(option =>
+                                        foundQuestion.caseSensitive
+                                            ? option === student.trim()
+                                            : option.toLowerCase() === student.trim().toLowerCase()
+                                    );
+
+                                if (!isCorrect) {
+                                    allCorrect = false;
+                                    break;
+                                }
+                            }
+
+                            if (allCorrect) {
+                                submittedStudentResponse.mark = {
+                                    totalMark: foundQuestion.totalPointsMax,
+                                };
                             } else {
-                                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
+                                submittedStudentResponse.mark = {
+                                    totalMark: foundQuestion.totalPointsMin,
+                                };
                             }
                         }
                     }

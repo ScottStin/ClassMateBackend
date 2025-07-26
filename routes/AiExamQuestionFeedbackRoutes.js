@@ -779,7 +779,7 @@ const openai = new OpenAI({
   
         They were given this prompt for context: ${prompt}.
 
-        Here are the correct answer to each blank, in order (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+        Here are the correct answer to each blank, in order (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc. Also, it's possible that there's more than one acceptable answer. In this case, acceptable answers are separated by a semicolon):
 
         ${fillBlanksQuestionList.map((question, index) => `QUESTION#${index + 1} CORRECT ANSWERS: ${question.blanks.map((blank, index) => `${index + 1}. ${blank.text}`).join(', ')}`)}
   
