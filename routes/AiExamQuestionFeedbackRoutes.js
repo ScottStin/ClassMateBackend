@@ -227,7 +227,7 @@ const openai = new OpenAI({
   
         Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
   
-        Finally, rate the text from 0-4 for each of the 3 categories (Vocabulary, Grammar and Content).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+        Finally, rate the text from 0-4 for each of the 3 categories (Vocabulary, Grammar and Content).  NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just ignore those categories for now.
   
         Return the feedback and mark in two separate objects. For example:
         {
@@ -241,7 +241,7 @@ const openai = new OpenAI({
           }
         }
 
-        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+        NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
       `;
 
       const completion = await openai.chat.completions.create({
@@ -318,7 +318,7 @@ const openai = new OpenAI({
   
         Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
   
-        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just ignore those categories for now.
   
         Return the feedback and mark in two separate objects. For example:
         {
@@ -330,7 +330,7 @@ const openai = new OpenAI({
           }
         }
 
-        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+        NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just give them both a placeholder of a score of 4 for those categories.
       `;
 
       const completion = await openai.chat.completions.create({
@@ -401,7 +401,7 @@ const openai = new OpenAI({
   
         Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 500 words (though if there are few mistakes, you can use less). If there are too many errors to address in 500 words, focus on the most important ones.
   
-        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just ignore those categories for now.
+        Finally, rate the text from 0-4 for each of the 3 categories (Accuracy, Fluency and Pronunciation).  NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just ignore those categories for now.
   
         Return the feedback and mark in two separate objects. For example:
         {
@@ -413,7 +413,7 @@ const openai = new OpenAI({
           }
         }
 
-        NOTE - because open AI currently doesn't offer fluency or pronuciation feedback for audio files, just give them both a palceholder of a score of 4 for those categories.
+        NOTE - because open AI currently doesn't offer fluency or pronunciation feedback for audio files, just give them both a placeholder of a score of 4 for those categories.
       `;
 
       const completion = await openai.chat.completions.create({
@@ -678,7 +678,7 @@ const openai = new OpenAI({
     try {
   
       const aiPrompt = `
-        You are an English teacher. Your student has been given a lift of words/sentences in a left column (leftOptions) and a list of matching words/sentences on a right column (rightOptions). They were tasked with matching the rightOptions to the leftOptions.
+        You are an English teacher. Your student has been given a list of words/sentences in a left column (leftOptions) and a list of matching words/sentences on a right column (rightOptions). They were tasked with matching the rightOptions to the leftOptions.
 
         They were given this prompt for context: ${prompt}.
 
@@ -748,6 +748,97 @@ const openai = new OpenAI({
     //       console.error("Failed to delete temporary file:", cleanupError.message);
     //     }
     //   }
+  });
+
+  /**
+   * This generates ai feedback for match options:
+   */
+  router.post("/generate-ai-exam-feedback/fill-blanks", async (req, res) => {
+    const { text, prompt, fillBlanksQuestionList, mediaPrompt1, mediaPrompt2, mediaPrompt3, caseSensitive } = req.body;
+
+    if (!text || !prompt || !fillBlanksQuestionList) {
+      return res.status(400).json({ error: "Text, prompt and blanks are required" });
+    }
+    
+    const studentResponse = JSON.parse(text).map((group, index) => {
+      const items = group.map((item, i) => `${i + 1}. ${item}`).join(', ');
+      return `QUESTION#${index + 1}: ${items}`;
+    }).join(' ... ');
+  
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
+    const hasMediaPrompts = mediaPrompt1Text || mediaPrompt2Text || mediaPrompt3Text;
+
+    try {
+  
+      const aiPrompt = `
+        You are an English teacher. Your student has been given a fill-in-the-blanks. Below you have the prompt, with the blanks represented by numbered spaces (e.g. 1.__________, 2.__________ etc.). Also note that there may be more than one question here, (if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+        ${fillBlanksQuestionList.map((question, index) => `QUESTION#${index + 1}: ${question.text}`)}
+  
+        They were given this prompt for context: ${prompt}.
+
+        Here are the correct answer to each blank, in order (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+        ${fillBlanksQuestionList.map((question, index) => `QUESTION#${index + 1} CORRECT ANSWERS: ${question.blanks.map((blank, index) => `${index + 1}. ${blank.text}`).join(', ')}`)}
+  
+        Here were the students responses, in order (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+        ${studentResponse}
+
+        ${caseSensitive ? 'Note that the answers are case sensitive - the student response should be in the correct case' : ''}
+  
+        Provide detailed feedback for the student. If they were correct, praise them and reiterate why it was correct (e.g. confirm the applicable English language rules etc.). If they were incorrect or partially correct, let them know what the correct response was and why, and consider why they may have chosen their response and explain why their response isn't correct (e.g. explain English language rules).
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 300 words (though you can use less if need be).
+  
+        Return the feedback as an object. For example:
+        {
+          "feedback": "Your detailed feedback here",
+        }
+
+        ${hasMediaPrompts ? `In addition, the student was also given the following media prompts (note audios have been converted to text):
+
+        ${mediaPrompt1Text ?? ''}
+        ${mediaPrompt2Text ?? ''}
+        ${mediaPrompt3Text ?? ''}` : ''}
+      `;
+
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        if(!aiResponse) {
+            return res.json({ feedback: 'Error generating ai feedback1' });
+        }
+
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        if(!result?.feedback) {
+            return res.json({ feedback: 'Error generating ai feedback2' });
+        }
+
+        // Separate feedback and score
+        const feedback = result.feedback;
+    
+        // Send the response with feedback and score as separate objects
+        console.log(feedback);
+        res.json({ feedback });
+
+    } catch (error) {
+
+      console.error("Error:", error.message);
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
+    } 
   });
 
 module.exports = router;
