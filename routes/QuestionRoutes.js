@@ -222,7 +222,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                             const student = studentAnswers[i];
                             const correct = correctAnswers[i];
 
-                            if (student && correct && correct.split(';').map(item => item.trim()).includes(student.trim())) {
+                            if (student && correct && correct.split('/').map(item => item.trim()).includes(student.trim())) {
                                 rawStudentMark += 1;
                             }
                             }
@@ -237,7 +237,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                                 const correct = correctAnswers[i];
 
                                 const correctOptions = correct
-                                    ?.split(';')
+                                    ?.split('/')
                                     .map(item => item.trim());
 
                                 const isCorrect = student &&
