@@ -266,6 +266,66 @@ router.patch('/submit-exam/:id', async function (req, res) {
                         }
                     }
 
+                    // -- If student's exam is a fill-in-blanks-select, applying the marking immediately:
+                    if (['fill-in-blanks-select'].includes(foundQuestion.type.toLowerCase()) && foundQuestion.fillBlanksQuestionList) {  
+                        let studentAnswers = JSON.parse(submittedStudentResponse.response).flat();
+                        let correctAnswers = foundQuestion.fillBlanksQuestionList.flatMap(item => item.blanks.map(blank => JSON.parse(blank.text)[blank.correctSelectOptionIndex]));
+                        
+                        const rawTotalMark = Math.min(studentAnswers.length, correctAnswers.length);
+
+                        // if partial marking, give the user points for each correct blank:
+                        if (submittedQuestion.partialMarking === true) {
+
+                            let rawStudentMark = 0;
+
+                            for (let i = 0; i < rawTotalMark; i++) {
+                            const student = studentAnswers[i];
+                            const correct = correctAnswers[i];
+
+                            if (student && correct && correct.split('/').map(item => item.trim()).includes(student.trim())) {
+                                rawStudentMark += 1;
+                            }
+                            }
+                            submittedStudentResponse.mark = { totalMark: (foundQuestion.totalPointsMax / rawTotalMark * rawStudentMark) }
+                        }
+                        // if  not partial marking, student must get all questions right to score:
+                        else {
+                            let allCorrect = true;
+
+                            for (let i = 0; i < rawTotalMark; i++) {
+                                const student = studentAnswers[i];
+                                const correct = correctAnswers[i];
+
+                                const correctOptions = correct
+                                    ?.split('/')
+                                    .map(item => item.trim());
+
+                                const isCorrect = student &&
+                                    correct &&
+                                    correctOptions?.some(option =>
+                                        foundQuestion.caseSensitive
+                                            ? option === student.trim()
+                                            : option.toLowerCase() === student.trim().toLowerCase()
+                                    );
+
+                                if (!isCorrect) {
+                                    allCorrect = false;
+                                    break;
+                                }
+                            }
+
+                            if (allCorrect) {
+                                submittedStudentResponse.mark = {
+                                    totalMark: foundQuestion.totalPointsMax,
+                                };
+                            } else {
+                                submittedStudentResponse.mark = {
+                                    totalMark: foundQuestion.totalPointsMin,
+                                };
+                            }
+                        }
+                    }
+
                     // -- Set studentResponse to an empty array if it's undefined, else save
                     if(foundQuestion.studentResponse === undefined || foundQuestion.studentResponse === null) {
                         foundQuestion.studentResponse = [submittedStudentResponse];

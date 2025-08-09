@@ -751,7 +751,7 @@ const openai = new OpenAI({
   });
 
   /**
-   * This generates ai feedback for match options:
+   * This generates ai feedback for fill blanks (written response):
    */
   router.post("/generate-ai-exam-feedback/fill-blanks", async (req, res) => {
     const { text, prompt, fillBlanksQuestionList, mediaPrompt1, mediaPrompt2, mediaPrompt3, caseSensitive } = req.body;
@@ -773,7 +773,7 @@ const openai = new OpenAI({
     try {
   
       const aiPrompt = `
-        You are an English teacher. Your student has been given a fill-in-the-blanks. Below you have the prompt, with the blanks represented by numbered spaces (e.g. 1.__________, 2.__________ etc.). Also note that there may be more than one question here, (if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+        You are an English teacher. Your student has been given a fill-in-the-blanks question. Below you have the prompt, with the blanks represented by numbered spaces (e.g. 1.__________, 2.__________ etc.). Also note that there may be more than one question here, (if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
 
         ${fillBlanksQuestionList.map((question, index) => `QUESTION#${index + 1}: ${question.text}`)}
   
@@ -788,6 +788,97 @@ const openai = new OpenAI({
         ${studentResponse}
 
         ${caseSensitive ? 'Note that the answers are case sensitive - the student response should be in the correct case' : ''}
+  
+        Provide detailed feedback for the student. If they were correct, praise them and reiterate why it was correct (e.g. confirm the applicable English language rules etc.). If they were incorrect or partially correct, let them know what the correct response was and why, and consider why they may have chosen their response and explain why their response isn't correct (e.g. explain English language rules).
+  
+        Provide suggestions in a single paragraph with detailed explanations of rules and examples where needed. Please limit your response to approximately 300 words (though you can use less if need be).
+  
+        Return the feedback as an object. For example:
+        {
+          "feedback": "Your detailed feedback here",
+        }
+
+        ${hasMediaPrompts ? `In addition, the student was also given the following media prompts (note audios have been converted to text):
+
+        ${mediaPrompt1Text ?? ''}
+        ${mediaPrompt2Text ?? ''}
+        ${mediaPrompt3Text ?? ''}` : ''}
+      `;
+
+      const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are an English teacher.' },
+            { role: 'user', content: aiPrompt },
+          ],
+        });
+    
+        const aiResponse = completion.choices[0].message.content.trim();
+    
+        if(!aiResponse) {
+            return res.json({ feedback: 'Error generating ai feedback1' });
+        }
+
+        // Parse the response
+        const result = JSON.parse(aiResponse);
+    
+        if(!result?.feedback) {
+            return res.json({ feedback: 'Error generating ai feedback2' });
+        }
+
+        // Separate feedback and score
+        const feedback = result.feedback;
+    
+        // Send the response with feedback and score as separate objects
+        console.log(feedback);
+        res.json({ feedback });
+
+    } catch (error) {
+
+      console.error("Error:", error.message);
+      res.status(500).json({ error: "Failed to process feedback. Please try again later." });
+
+    } 
+  });
+
+  /**
+   * This generates ai feedback for fill blanks (select response):
+   */
+  router.post("/generate-ai-exam-feedback/fill-blanks-select", async (req, res) => {
+    const { text, prompt, fillBlanksQuestionList, mediaPrompt1, mediaPrompt2, mediaPrompt3, caseSensitive } = req.body;
+
+    if (!text || !prompt || !fillBlanksQuestionList) {
+      return res.status(400).json({ error: "Text, prompt and blanks are required" });
+    }
+    
+    const studentResponse = JSON.parse(text).map((group, index) => {
+      const items = group.map((item, i) => `${i + 1}. ${item}`).join(', ');
+      return `QUESTION#${index + 1}: ${items}`;
+    }).join(' ... ');
+  
+    const mediaPrompt1Text = await addMediaPromptsToAiText(mediaPrompt1);
+    const mediaPrompt2Text = await addMediaPromptsToAiText(mediaPrompt2);
+    const mediaPrompt3Text = await addMediaPromptsToAiText(mediaPrompt3);
+    const hasMediaPrompts = mediaPrompt1Text || mediaPrompt2Text || mediaPrompt3Text;
+    
+    try {
+  
+      const aiPrompt = `
+        You are an English teacher. Your student has been given a fill-in-the-blanks question, and asked to select the correct answer from a list.
+        
+        Below you have the prompt, with the blanks represented by numbered spaces (e.g. 1.__________, 2.__________ etc.). Also note that there may be more than one question here, (if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+       ${fillBlanksQuestionList.map((question, index) => `QUESTION#${index + 1}: ${question.text} `)}
+  
+        They were given this prompt for context: ${prompt}.
+
+        Here are the option they were given for each blank, with the correct answer marked in brackets (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+        ${fillBlanksQuestionList.map((question, questionIndex) => `QUESTION#${questionIndex + 1} OPTIONS: ${question.blanks.map((blank, blankIndex) => `${blankIndex + 1}. ${JSON.parse(blank.text).map((option, optionIndex) => ` ${option}${optionIndex === blank.correctSelectOptionIndex ? " (correct)" : ""}`)}`).join(', ')}`)}
+  
+        Here are the students responses form each question, in order (again, note that there may be more than one question here, and if so, they've been separated by QUESTION#1. ... QUESTION#2. ... etc.):
+
+        ${studentResponse}
   
         Provide detailed feedback for the student. If they were correct, praise them and reiterate why it was correct (e.g. confirm the applicable English language rules etc.). If they were incorrect or partially correct, let them know what the correct response was and why, and consider why they may have chosen their response and explain why their response isn't correct (e.g. explain English language rules).
   
