@@ -25,29 +25,6 @@ router.get('/', async function (req, res) {
     }
 });
 
-// router.patch('/register-default', async (req, res) => {
-//   try {
-//     const exam = await examModel.findOne({ default: true });
-//     if (!exam) {
-//       return res.status(404).json('Default exam not found');
-//     }
-
-//     const studentId = req.body.studentId;
-
-//     if (exam.studentsEnrolled.includes(studentId)) {
-//       return res.status(400).json('User has already signed up for this exam');
-//     }
-
-//     exam.studentsEnrolled.push(studentId);
-//     await exam.save();
-
-//     res.json(`Student added to: ${exam}`);
-//   } catch (error) {
-//     console.error("Error joining default exam:", error);
-//     res.status(500).send("Internal Server Error");
-//   }
-// });
-
 router.post('/new', async (req, res) => {
   try {
     console.log('req.body:');
@@ -144,17 +121,59 @@ router.patch('/register/:id', async (req, res) => {
 });
 
 router.delete('/:id', async (req, res) => {
-    try {
-      const deletedExam = await examModel.findByIdAndDelete(req.params.id);
-      if (deletedExam) {
-        res.status(200).json(deletedExam);
-      } else {
-        res.status(404).json({ message: "Exam not found" });
-      }
-    } catch (error) {
-      console.error("Error deleting exam:", error);
-      res.status(500).send("Internal Server Error");
+  try {
+    const examId  = req.params.id
+    const exam = await examModel.findById(examId);
+
+    if(!exam) {
+      res.status(404).json({ message: "Exam not found" });
+      return;
     }
-  });
+
+    if(exam.default) {
+      res.status(404).json({ message: "Cannot delete default exam" });
+      return;
+    }
+
+    const deletedExam = await examModel.findByIdAndDelete(examId);
+
+    if (!deletedExam) {
+      res.status(404).json({ message: "Exam not found" });
+    }
+
+    // Delete question
+    await questionModel.deleteMany({ examId });
+
+    // Delete exam prompts:
+    const schoolId = deletedExam.schoolId;
+    const folderPathPrompts = `${schoolId}/exam-prompts/${examId}`;
+    const { resources: promptFolder } = await cloudinary.api.resources({
+      type: "upload",
+      prefix: folderPathPrompts,
+      max_results: 1
+    });
+    if(promptFolder?.length > 0) {
+      await cloudinary.api.delete_resources_by_prefix(folderPathPrompts);
+      await cloudinary.api.delete_folder(folderPathPrompts);
+    }
+
+    // Delete exam responses:
+    const folderPathResponses = `${schoolId}/exam-question-responses/${examId}`;
+    const { resources: responseFolder }  = await cloudinary.api.resources({
+      type: "upload",
+      prefix: folderPathResponses,
+      max_results: 1
+    });
+    if(responseFolder?.length > 0) {
+      await cloudinary.api.delete_resources_by_prefix(folderPathResponses);
+      await cloudinary.api.delete_folder(folderPathResponses);
+    }
+
+    res.status(200).json(deletedExam);
+  } catch (error) {
+    console.error("Error deleting exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 module.exports = router;
