@@ -15,7 +15,7 @@ const openai = new OpenAI({
 
   /**
    * Transcribe audio
-   * This functin downloads and transcribes the audio files
+   * This function downloads and transcribes the audio files
    * Converts the audio file into a format that the AI marking can read
    */
   async function transcribeAudioFile(audioUrl) {

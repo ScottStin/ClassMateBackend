@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { cloudinary, storage } = require('../cloudinary');
+const { getIo } = require('../socket-io');
 
 const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
@@ -343,6 +344,12 @@ router.patch('/submit-exam/:id', async function (req, res) {
           exam.studentsCompleted.push({studentId: studentId, mark: null});
           await exam.save();
         res.status(200).json('Responses submitted successfully');
+
+        // Emit event to all student's in school
+        if(exam?.schoolId) {
+            const io = getIo();
+            io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+        }
     } catch (error) {
       console.error("Error submitting responses:", error);
       res.status(500).send("Internal Server Error");
@@ -440,6 +447,12 @@ router.patch('/submit-feedback/:id', async function (req, res) {
         }
         await exam.save();
         res.status(200).json('Responses submitted successfully');
+
+        // Emit event to all student's in school
+        if(exam?.schoolId) {
+            const io = getIo();
+            io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+        }
     } catch (error) {
       console.error("Error submitting responses:", error);
       res.status(500).send("Internal Server Error");

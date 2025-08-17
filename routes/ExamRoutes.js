@@ -4,6 +4,7 @@ const router = express.Router();
 const examModel = require('../models/exam-model');
 const questionModel = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
+const { getIo } = require('../socket-io');
 
 router.get('/', async function (req, res) {
     try {
@@ -27,10 +28,6 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
-    console.log('req.body:');
-    console.log(req.body);
-
-    
     const createdExam = await examModel.create(req.body.examData);
     
     console.log('createdExam:');
@@ -77,6 +74,12 @@ router.post('/new', async (req, res) => {
       await examModel.updateMany({ default: true, _id: { $ne: createdExam._id } }, { $set: { default: false } });
     }
     res.status(201).json(createdExam);
+
+    // Emit event to all student's in school
+    if(createdExam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + createdExam.schoolId, {action: 'examCreated', data: createdExam});
+    }
   } catch (error) {
     console.error("Error creating new exam or adding questions:", error);
     res.status(500).send("Internal Server Error");
@@ -114,6 +117,11 @@ router.patch('/register/:id', async (req, res) => {
     await exam.save();
 
     res.json(`Student added to: ${exam}`);
+
+    if(exam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+    }
   } catch (error) {
     console.error("Error joining exam:", error);
     res.status(500).send("Internal Server Error");
@@ -170,6 +178,12 @@ router.delete('/:id', async (req, res) => {
     }
 
     res.status(200).json(deletedExam);
+
+    // Emit event to all student's in school
+    if(deletedExam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + deletedExam.schoolId, {action: 'examDeleted', data: deletedExam});
+    }
   } catch (error) {
     console.error("Error deleting exam:", error);
     res.status(500).send("Internal Server Error");
