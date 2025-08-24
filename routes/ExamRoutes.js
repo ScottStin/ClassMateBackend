@@ -146,7 +146,7 @@ router.patch('/enrol-students/:id', async (req, res) => {
       exam.studentsEnrolled.push(studentId);
     }
     await exam.save();
-    res.json(`Student added to: ${exam}`);
+    res.json(exam);
 
 
     if(exam?.schoolId) {
