@@ -128,6 +128,37 @@ router.patch('/register/:id', async (req, res) => {
   }
 });
 
+router.patch('/enrol-students/:id', async (req, res) => {
+  try {
+    const exam = await examModel.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json('Exam not found');
+    }
+
+    const studentIds = req.body.studentIds;
+
+    for(const studentId of studentIds) {
+      if (exam.studentsEnrolled.includes(studentId)) {
+        // res.status(400).json('User has already signed up for this exam');
+        continue
+      }
+      exam.studentsEnrolled.push(studentId);
+    }
+    await exam.save();
+    res.json(`Student added to: ${exam}`);
+
+
+    if(exam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+    }
+  } catch (error) {
+    console.error("Error joining exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const examId  = req.params.id
