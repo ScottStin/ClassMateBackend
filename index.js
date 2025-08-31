@@ -84,8 +84,8 @@ const app = express();
 const cors = require('cors');
 
 // --- increase req.body size to allow for
-app.use(bodyParser.json({ limit: '50mb' })); // JSON payload limit
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true })); // URL-encoded payload limit
+app.use(bodyParser.json({ limit: '100mb' })); // JSON payload limit
+app.use(bodyParser.urlencoded({ limit: '100mb', extended: true })); // URL-encoded payload limit
 
 // app.use(bodyParser.urlencoded({ extended: false }));
 // app.use(bodyParser.json());

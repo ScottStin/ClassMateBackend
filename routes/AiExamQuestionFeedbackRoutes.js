@@ -81,7 +81,7 @@ const openai = new OpenAI({
   
     if (mediaPrompt?.url && mediaPrompt?.url !== '' && mediaPrompt?.type && mediaPrompt?.type !== '') {
       
-      // TODO - add image prompt functionaltiy (base64 is too large too send to chat gpt, and wont accept files right now. We should use somehting like dallee to describe the image first.)
+      // TODO - add image prompt functionality (base64 is too large too send to chat gpt, and wont accept files right now. We should use somehting like dallee to describe the image first.)
       // if(mediaPrompt?.type === 'image') {
       //   const image1 = await urlImageToBase64(mediaPrompt.url);
       //   mediaPromptText = `The student was also given the following image to accompany the written prompt: ${image1}.`

@@ -29,9 +29,7 @@ router.get('/', async function (req, res) {
 router.post('/new', async (req, res) => {
   try {
     const createdExam = await examModel.create(req.body.examData);
-    
-    console.log('createdExam:');
-    console.log(createdExam);
+
     const questionIds = [];
     for (let question of req.body.questions) {
       const { subQuestions, id, ...questionData } = question;
