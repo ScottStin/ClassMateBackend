@@ -44,20 +44,52 @@ router.post('/new', async (req, res) => {
       if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
         questionData.prompt2.fileString = await saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, req.body.examData.schoolId, createdExam._id)
       }
+      if (questionData.prompt3?.fileString && questionData.prompt3?.type) {
+        questionData.prompt3.fileString = await saveExamQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, req.body.examData.schoolId, createdExam._id)
+      }
   
       // --- Create parent question:
       const createdQuestion = await questionModel.create(questionData);
 
       // --- check if question has sub questions, and if so, save them:
       if (subQuestions?.length > 0) {
-        for (let question of subQuestions) {
-          const { id, ...questionWithoutId } = question;
-          const questionData = {
+        for (let subQuestion of subQuestions) {
+          const { id, ...questionWithoutId } = subQuestion;
+          const subQuestionData = {
             ...questionWithoutId,
             parent: createdQuestion.id,
-            examId: createdExam._id, // Add examId to sub questio
+            examId: createdExam._id, // Add examId to sub question
           };
-          const createdSubQuestion = await questionModel.create(questionData);
+
+          // --- Upload sub-question prompts if they exist:
+          if (subQuestionData.prompt1?.fileString && subQuestionData.prompt1?.type) {
+            subQuestionData.prompt1.fileString = await saveExamQuestionPrompt(
+              subQuestionData.prompt1.fileString,
+              subQuestionData.prompt1.type,
+              req.body.examData.schoolId,
+              createdExam._id
+            );
+          }
+
+          if (subQuestionData.prompt2?.fileString && subQuestionData.prompt2?.type) {
+            subQuestionData.prompt2.fileString = await saveExamQuestionPrompt(
+              subQuestionData.prompt2.fileString,
+              subQuestionData.prompt2.type,
+              req.body.examData.schoolId,
+              createdExam._id
+            );
+          }
+
+          if (subQuestionData.prompt3?.fileString && subQuestionData.prompt3?.type) {
+            subQuestionData.prompt3.fileString = await saveExamQuestionPrompt(
+              subQuestionData.prompt3.fileString,
+              subQuestionData.prompt3.type,
+              req.body.examData.schoolId,
+              createdExam._id
+            );
+          }
+
+          const createdSubQuestion = await questionModel.create(subQuestionData);
           createdQuestion.subQuestions.push(createdSubQuestion.id);
           await createdQuestion.save();
         }

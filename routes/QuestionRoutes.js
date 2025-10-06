@@ -155,7 +155,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
             // if  not partial marking, student must get all questions right to score:
             else {
             if(studentResponsesMultiChoice.length === correctAnswerIdStrings.length && studentResponsesMultiChoice.every((ans) => correctAnswerIdStrings.includes(ans))) {
-                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers corret
+                submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMax } // student got all answers correct
             } else {
                 submittedStudentResponse.mark = { totalMark: foundQuestion.totalPointsMin } // student did not get all answers correct
             }
