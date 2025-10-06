@@ -126,6 +126,85 @@ router.patch('/register/:id', async (req, res) => {
   }
 });
 
+router.patch('/reset-student-exam/:id', async (req, res) => {
+  try {
+
+    const exam = await examModel.findById(req.params.id);
+    if (!exam) {
+      return res.status(404).json('Exam not found');
+    }
+  
+    let questions = await questionModel.find({examId: exam._id})
+    if (!questions || questions.length === 0) {
+      return res.status(404).json('Questions not found');
+    }
+
+    const studentId = req.body.studentId;
+    if (!studentId) {
+      return res.status(404).json('Student not found');
+    }
+
+    const schoolId = exam.schoolId;
+    if (!schoolId) {
+      return res.status(404).json('School not found');
+    }
+
+    for (const question of questions) {
+      if(!question.studentResponse || question.studentResponse.length === 0) {
+        continue;
+      }
+
+      const studentResponse = question.studentResponse.find(
+        (response) => response.studentId.toString() === studentId.toString()
+      )
+
+      if(!studentResponse) {
+        continue;
+      }
+
+      question.studentResponse = question.studentResponse.filter(
+        (response) => response.studentId.toString() !== studentId.toString()
+      );
+      await question.save();
+
+      if(!['audio-response', 'repeat-sentence', 'read-outloud'].includes(question.type)) {
+        continue;
+      }
+
+      const fileName = studentResponse.response.split("/").pop().split(".")[0];
+      const cloudinaryFilePath = `${schoolId}/exam-question-responses/${exam._id}/${fileName}`;
+
+      try {
+        const cloudinaryFilePath = `${schoolId}/exam-question-responses/${exam._id}/${fileName}`;
+
+        console.log('Deleting from Cloudinary:', cloudinaryFilePath);
+
+        const result = await cloudinary.uploader.destroy(cloudinaryFilePath, {
+          resource_type: 'video', // REQUIRED for audio/video uploads
+          invalidate: true        // optional: clears cached versions
+        });
+
+        console.log('Cloudinary destroy result:', result);
+      } catch (err) {
+        console.error('Error deleting student response:', err);
+      }
+    }
+  
+    exam.studentsCompleted = exam.studentsCompleted.filter((student) => student.studentId !== studentId)
+    await exam.save();
+
+    res.json(`Student exam questions reset: ${exam._id}`);
+
+    if(exam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+    }
+  } catch (error) {
+    console.error("Error resetting student's exam exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.patch('/enrol-students/:id', async (req, res) => {
   try {
     const exam = await examModel.findById(req.params.id);
