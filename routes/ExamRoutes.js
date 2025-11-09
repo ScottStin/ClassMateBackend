@@ -28,6 +28,15 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
+    // --- prevent user from having more than 100 exams at a time:
+    const examCount = await examModel.countDocuments({ schoolId: req.body.examData.schoolId });
+    if (examCount > 100) {
+      return res.status(400).json({ 
+        message: `You can only create up to 100 exams.` 
+      });
+    }
+
+    // --- create exam:
     const createdExam = await examModel.create(req.body.examData);
 
     const questionIds = [];
@@ -121,10 +130,19 @@ router.post('/new', async (req, res) => {
  */
 
 async function saveExamQuestionPrompt(base64ExamPrompt, promptType, schoolId, examId) {
+    const maxFileSizeMb = 10; // 10MB
+    const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+
+    // --- Estimate the Base64 file size before uploading - TODO - move to service
+    const sizeInBytes = Buffer.byteLength(base64ExamPrompt, 'base64');
+    if (sizeInBytes > maxFileSizeBytes) {
+        throw new Error(`File too large. Max allowed size is ${maxFileSizeMb} MB.`);
+    }
+
     const result = await cloudinary.uploader.upload(base64ExamPrompt, {
         folder: `${schoolId}/exam-prompts/${examId}`,
         resource_type: promptType === 'audio' ? 'video' : 'image' // Specify 'video' for audio files. Otherwise, upload an image
-    });
+    }); // todo - move to service
   
   return result.secure_url;
 }

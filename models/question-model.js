@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
+const MAX_SUB_QUESTIONS = 100;
 
 const questionSchema = mongoose.Schema({
-    name: { type: String, required: true },
+    name: { type: String, required: true, maxlength: 50, },
     examId: { type: String, required: true },
-    writtenPrompt: { type: String, default: null },
+    writtenPrompt: { type: String, default: null, maxlength: 500, },
     teacherFeedback: { type: Boolean, default: null },
     autoMarking: { type: Boolean, default: null },
     type: { type: String, required: true },
@@ -28,9 +29,9 @@ const questionSchema = mongoose.Schema({
         leftOption: { type: String, required: true },
         rightOption: { type: String, required: true }
     }],
-    totalPointsMin: { type: Number, default: 0 },
-    totalPointsMax: { type: Number, default: 5 },
-    length: { type: Number, default: null },
+    totalPointsMin: { type: Number, default: 0, max:999, min:0 },
+    totalPointsMax: { type: Number, default: 5, max:1000, min:1 },
+    length: { type: Number, default: null, min:1, max: 600},
     prompt1: {
         fileString: { type: String, default: null },
         type: { type: String, default: null },
@@ -64,5 +65,9 @@ const questionSchema = mongoose.Schema({
       }],
     parent: { type: String, default: null },
 }, { timestamps: true });
+
+questionSchema.path('subQuestions').validate(function(value) {
+  return value.length <= MAX_SUB_QUESTIONS;
+}, `You can only have up to ${MAX_SUB_QUESTIONS} sub-questions.`);
 
 module.exports = mongoose.model('questionModel', questionSchema);
