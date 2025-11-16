@@ -35,6 +35,10 @@ const examSchema = mongoose.Schema({
         min: 0, 
         max: 999,
     },
+    examCoverPhoto:{
+        url:String,
+        fileName:String
+    },
     totalPointsMax: { 
         type: Number, 
         default: 100, 

@@ -106,6 +106,15 @@ router.post('/new', async (req, res) => {
       questionIds.push(createdQuestion.id);
     }
     createdExam.questions = questionIds;
+
+    // --- upload photo to cloudinary:
+    if(createdExam.examCoverPhoto) {
+      await cloudinary.uploader.upload(createdExam.examCoverPhoto.url, {folder: `${req.body.examData.schoolId}/exam-prompts/${createdExam._id}/cover-photo`}, async (err, result)=>{
+        if (err) return console.log(err);  
+        createdExam.examCoverPhoto = {url:result.url, fileName:result.public_id};
+      })
+    }
+
     await createdExam.save();
 
     // Check if the new exam is set as default, and if so, change all other defaults to false.
