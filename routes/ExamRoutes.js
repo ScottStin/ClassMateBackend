@@ -108,7 +108,7 @@ router.post('/new', async (req, res) => {
     createdExam.questions = questionIds;
 
     // --- upload photo to cloudinary:
-    if(createdExam.examCoverPhoto) {
+    if(createdExam.examCoverPhoto?.url) {
       await cloudinary.uploader.upload(createdExam.examCoverPhoto.url, {folder: `${req.body.examData.schoolId}/exam-prompts/${createdExam._id}/cover-photo`}, async (err, result)=>{
         if (err) return console.log(err);  
         createdExam.examCoverPhoto = {url:result.url, fileName:result.public_id};
