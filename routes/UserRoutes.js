@@ -56,30 +56,28 @@ router.post('/', async (req, res) => {
     if (createdUser) {
       try {
 
-        
         // --- enroll new users in default exam:
         if(createdUser.userType === 'student') {
           const exam = await examModel.findOne({ default: true });
           if (!exam) {
             return res.status(404).json('Default exam not found');
           }
+          const userId = createdUser._id;
       
-          const userEmail = createdUser.email;
-      
-          if (exam.studentsEnrolled.includes(userEmail)) {
+          if (exam.studentsEnrolled.includes(userId)) {
             return res.status(400).json('User has already signed up for this exam');
           }
       
-          exam.studentsEnrolled.push(userEmail);
+          exam.studentsEnrolled.push(userId);
           await exam.save();
         }
 
         // --- upload user photo to cloudinary:
-        if(newUser.profilePicture) {
-          await cloudinary.uploader.upload(newUser.profilePicture.url, {folder: `${newUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
+        if(createdUser.profilePicture?.url) {
+          await cloudinary.uploader.upload(createdUser.profilePicture.url, {folder: `${createdUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
             if (err) return console.log(err);  
-            newUser.profilePicture = {url:result.url, fileName:result.public_id};
-            await newUser.save();
+            createdUser.profilePicture = {url:result.url, fileName:result.public_id};
+            await createdUser.save();
           })
         }
       } catch (error) {
