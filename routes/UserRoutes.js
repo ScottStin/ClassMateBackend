@@ -8,7 +8,9 @@ const jwt = require('jsonwebtoken');
 const { getIo } = require('../socket-io');
 
 const examModel = require('../models/exam-model');
+const questionModel = require('../models/question-model');
 const userModel = require('../models/user-models');
+const homeworkModel = require('../models/homework-model');
 
 /**
  * ==============================
@@ -161,13 +163,58 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).send('User not found');
     }
     
-    // Remove profile picture:
-    if(deletedUser.profilePicture) {
+    // --- Remove profile picture:
+    console.log(deletedUser.profilePicture)
+    if(deletedUser.profilePicture?.url) {
       const { fileName } = deletedUser.profilePicture;
       await cloudinary.uploader.destroy(fileName, (err, result) => {
         if (err) console.log('Error deleting profile picture:', err);
       });
     }
+
+    // --- find user _id in questionModel studentResponse studentId and delete studentResponse:
+      await questionModel.updateMany(
+      {},
+      {
+        $pull: {
+          studentResponse: { studentId: deletedUser._id.toString() }
+        }
+      }
+    );
+
+    // remove student from exam model:
+    await examModel.updateMany(
+    {},
+    {
+      $pull: {
+        studentsEnrolled: deletedUser._id.toString(),
+        studentsCompleted: { studentId: deletedUser._id.toString() },
+        aiMarkingComplete: { studentId: deletedUser._id.toString() }
+      }
+    }
+  );
+
+    // --- delete user's comments from homework:
+    await homeworkModel.updateMany(
+  {},
+  {
+        $pull: {
+          comments: { studentId: deletedUser._id.toString() },
+          students: { studentId: deletedUser._id.toString() }
+        }
+      }
+    );
+
+  //   // remove student from lessons:
+  //   await lessonModel.updateMany(
+  //   {},
+  //   {
+  //     $pull: {
+  //       studentsEnrolledIds: deletedUser._id.toString(),
+  //       lessonStudentsAttended: deletedUser._id.toString()
+  //     }
+  //   }
+  // ) // note - let's not delete a user from the lesson, so we can track number of students enrolled in historical lessons
 
     res.status(201).json(deletedUser);
   } catch (error) {
