@@ -295,6 +295,47 @@ router.patch('/enrol-students/:id', async (req, res) => {
   }
 });
 
+router.patch('/un-enrol-student-from-exam/:id', async (req, res) => {
+  try {
+    const exam = await examModel.findById(req.params.id);
+
+    if (!exam) {
+      return res.status(404).json('Exam not found');
+    }
+
+    const studentId = req.body.studentId;
+
+    if (!exam.studentsEnrolled.includes(studentId)) {
+      res.status(400).json('User is not currently enrolled in this exam');
+      return;
+    }
+
+    if(exam.studentsCompleted.map(
+        (studentCompleted) => studentCompleted.studentId
+      ).includes(studentId)) {
+        res.status(400).json('User has already completed the exam and therefore cannot be removed');
+        return;
+      }
+  
+      exam.studentsEnrolled = exam.studentsEnrolled.filter(
+        (s) => s !== studentId
+      );
+    
+    await exam.save();
+    res.json(exam);
+
+
+    if(exam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+    }
+
+  } catch (error) {
+    console.error("Error joining exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const examId  = req.params.id
