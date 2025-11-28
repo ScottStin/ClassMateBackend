@@ -185,6 +185,71 @@ router.patch('/register/:id', async (req, res) => {
   }
 });
 
+router.patch('/update-exam/:id', async (req, res) => {
+  try {
+    console.log('hit1')
+    const examData = req.body.examData;
+    console.log(examData)
+    const exam = await examModel.findById(req.params.id);
+
+    console.log(exam);
+
+    if (!exam) {
+      return res.status(404).json('Exam not found');
+    }
+
+    const { examCoverPhoto, ...examDataWithoutPhoto } = examData;
+
+    Object.assign(exam, examDataWithoutPhoto);
+
+    // --- upload photo to cloudinary:
+    if(examData.examCoverPhoto?.url) {
+      // Delete old cover photo: (todo - move to file service)
+      const schoolId = examData.schoolId;
+      const folderPathCoverPhoto = `${schoolId}/exam-prompts/${req.params.id}/cover-photo`;
+      const { resources: coverPhotoFolder } = await cloudinary.api.resources({
+        type: "upload",
+        prefix: folderPathCoverPhoto,
+        max_results: 1
+      });
+
+      if(coverPhotoFolder?.length > 0) {
+        await cloudinary.api.delete_resources_by_prefix(folderPathCoverPhoto);
+        await cloudinary.api.delete_folder(folderPathCoverPhoto);
+      }
+    
+      // upload new cover photo:
+      await cloudinary.uploader.upload(examData.examCoverPhoto.url, {folder: `${examData.schoolId}/exam-prompts/${exam._id}/cover-photo`}, async (err, result)=>{
+        if (err) return console.log(err);  
+        exam.examCoverPhoto = {url:result.url, fileName:result.public_id};
+      })
+    }
+
+    await exam.save();
+ 
+    for (const question of req.body.questions){
+      const foundQuestion = await questionModel.findById(question.questionId);
+      if(!foundQuestion) {
+        continue;
+      }
+      foundQuestion.name = question.updatedQuestionName
+      await foundQuestion.save();
+    }
+
+    exam.questions = req.body.questions.map((q) => q.questionId);
+    await exam.save();
+    res.json(`Exam updated: ${exam._id}`);
+
+    if(exam?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+    }
+  } catch (error) {
+    console.error("Error updating exam:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.patch('/reset-student-exam/:id', async (req, res) => {
   try {
 
@@ -383,6 +448,19 @@ router.delete('/:id', async (req, res) => {
     if(responseFolder?.length > 0) {
       await cloudinary.api.delete_resources_by_prefix(folderPathResponses);
       await cloudinary.api.delete_folder(folderPathResponses);
+    }
+
+    // Delete  cover photo: (todo - move to file service)
+    const folderPathCoverPhoto = `${schoolId}/exam-prompts/${req.params.id}/cover-photo`;
+    const { resources: coverPhotoFolder } = await cloudinary.api.resources({
+      type: "upload",
+      prefix: folderPathCoverPhoto,
+      max_results: 1
+    });
+
+    if(coverPhotoFolder?.length > 0) {
+      await cloudinary.api.delete_resources_by_prefix(folderPathCoverPhoto);
+      await cloudinary.api.delete_folder(folderPathCoverPhoto);
     }
 
     res.status(200).json(deletedExam);
