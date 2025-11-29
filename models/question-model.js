@@ -32,6 +32,7 @@ const questionSchema = mongoose.Schema({
     totalPointsMin: { type: Number, default: 0, max:999, min:0 },
     totalPointsMax: { type: Number, default: 5, max:1000, min:1 },
     length: { type: Number, default: null, min:1, max: 600},
+    limitAudioAttempts: { type: Number, default: null, min:1, max: 10},
     prompt1: {
         fileString: { type: String, default: null },
         type: { type: String, default: null },
