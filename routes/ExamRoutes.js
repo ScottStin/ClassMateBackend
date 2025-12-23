@@ -187,12 +187,8 @@ router.patch('/register/:id', async (req, res) => {
 
 router.patch('/update-exam/:id', async (req, res) => {
   try {
-    console.log('hit1')
     const examData = req.body.examData;
-    console.log(examData)
     const exam = await examModel.findById(req.params.id);
-
-    console.log(exam);
 
     if (!exam) {
       return res.status(404).json('Exam not found');

@@ -242,6 +242,40 @@ router.patch('/cancel/:id', async (req, res) => {
   }
 });
 
+router.delete('/bulk-delete', async (req, res) => {
+  try {
+    const lessonIds = req.body;
+
+    if (!Array.isArray(lessonIds) || lessonIds.length === 0) {
+      return res.status(400).json({ message: 'No lessons provided' });
+    }
+
+    // Find lessons first so we can return + emit them
+    const lessonsToDelete = await lessonModel.find({ _id: { $in: lessonIds } });
+
+    if (lessonsToDelete.length === 0) {
+      return res.status(404).json({ message: 'No lessons found' });
+    }
+
+    await lessonModel.deleteMany({ _id: { $in: lessonIds } });
+
+    res.status(200).json(lessonsToDelete);
+
+    // Emit socket events
+    const io = getIo();
+    lessonsToDelete.forEach(lesson => {
+      io.emit(
+        'lessonEvent-' + lesson.schoolId,
+        { action: 'lessonDeleted', data: lesson }
+      );
+    });
+
+  } catch (error) {
+    console.error('Error bulk deleting lessons:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const deletedLesson = await lessonModel.findByIdAndDelete(req.params.id);

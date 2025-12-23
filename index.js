@@ -4,7 +4,7 @@
  * ==============================
 */
 
-// Install nodejs v 16.13.2
+// Install nodejs v 16.13.2. UPDATE - now using 20.19.6
 // Install npm packages with command 'npm install' in backend folder
 // Install nodemon with npm install -g nodemon
 // Download mongoDB/mongod (now just mongodash): https://www.youtube.com/watch?v=TLavdoNkFik
