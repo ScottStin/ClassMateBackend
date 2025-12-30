@@ -103,8 +103,12 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
-    // Exclude the profilepicture property from the update
-    const { profilePicture, ...updatedFields } = req.body;
+    // Exclude the profile picture property from the update
+    const { profilePicture, unhashedPassword, ...updatedFields } = req.body;
+
+    if (unhashedPassword && unhashedPassword !== '') {
+      updatedFields.hashedPassword = await bcrypt.hash(unhashedPassword, 12);
+    }
 
     // get original user before updating:
     const nonUpdatedUser = await userModel.findOne({ _id: req.params.id });
