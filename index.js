@@ -194,6 +194,7 @@ const messengerRouter = require('./routes/MessengerRoutes');
 const conversationRouter = require('./routes/ConversationRoutes');
 const aiExamQuestionFeedbackRouter = require('./routes/AiExamQuestionFeedbackRoutes');
 const aiPromptGeneratorRoute = require('./routes/AiPromptRoutes');
+const billingRoute = require('./routes/BillingRoutes')
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -207,6 +208,7 @@ app.use('/messages', messengerRouter);
 app.use('/conversations', conversationRouter);
 app.use('/ai-feedback', aiExamQuestionFeedbackRouter);
 app.use('/ai-prompt-generator', aiPromptGeneratorRoute);
+app.use('/billing', billingRoute);
 
 /**
  * ==============================

@@ -6,6 +6,7 @@ const upload = multer({ storage });
 const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken');
 const { getIo } = require('../socket-io');
+const crypto = require('crypto');
 
 const examModel = require('../models/exam-model');
 const questionModel = require('../models/question-model');
@@ -255,6 +256,41 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error("Error logging in:", error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/login-cm-admin-user', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const correctPassword = process.env.CM_ADMIN_USER_PASSWORD;
+
+    if (!password || !correctPassword) {
+      return res.status(401).json({
+        error: 'Authentication failed.',
+      });
+    }
+
+    const isValid =
+      password.length === correctPassword.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(password),
+        Buffer.from(correctPassword)
+      );
+
+    if (!isValid) {
+      return res.status(401).json({
+        error: 'Authentication failed.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      role: 'cm-admin',
+    });
+
+  } catch (error) {
+    console.error('Error logging in as CM admin user:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

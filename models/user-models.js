@@ -1,4 +1,8 @@
 const mongoose = require('mongoose');
+const {
+  studentBillingSchema,
+  schoolBillingSchema
+} = require('./billing-model');
 
 const userSchema = mongoose.Schema({
     name:{
@@ -43,6 +47,14 @@ const userSchema = mongoose.Schema({
     },
     statement:{
         type: String,
+    },
+
+    studentBilling: {
+        type: studentBillingSchema,
+    },
+
+    schoolBilling: {
+        type: schoolBillingSchema,
     },
 }, {
     timestamps: true
