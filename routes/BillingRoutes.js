@@ -107,9 +107,9 @@ router.get("/payment-method/:userId", async (req, res, next) => {
   }
 });
 
-router.delete("/payment-method", async (req, res, next) => {
+router.delete("/payment-method/:userId", async (req, res, next) => {
   try {
-    const user = await userModel.findById(req.body.userId);
+    const user = await userModel.findById(req.params.userId);
 
     if (!user?.studentBilling?.stripeCustomerId) {
       return res.json({ success: true });
