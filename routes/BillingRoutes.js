@@ -70,11 +70,8 @@ router.post('/set-default-payment-method', async (req, res, next) => {
 
 router.get("/payment-method/:userId", async (req, res, next) => {
   try {
-    console.log('payment-method hit!')
-    console.log(req.params.userId)
     const user = await userModel.findById(req.params.userId);
 
-    console.log(user.studentBilling)
     if (!user?.studentBilling?.stripeCustomerId) {
       return res.json(null);
     }
@@ -84,17 +81,11 @@ router.get("/payment-method/:userId", async (req, res, next) => {
       type: "card"
     });
 
-    console.log('methods');
-    console.log(methods);
-
     if (!methods.data.length) {
       return res.json(null);
     }
 
     const card = methods.data[0].card;
-
-    console.log('card');
-    console.log(card);
 
     res.json({
       brand: card.brand,
