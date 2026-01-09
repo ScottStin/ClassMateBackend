@@ -132,11 +132,15 @@ router.patch('/:id', async (req, res) => {
         updatedUser.profilePicture = {url:result.url, fileName:result.public_id};
         await updatedUser.save();
         if (image && req.body.previousProfilePicture) {
-          const { fileName } = req.body.previousProfilePicture;
-          await cloudinary.uploader.destroy(fileName, (err, result) => {
-            if (err) console.log('Error deleting previous profile picture:', err);
-          });
-        }
+          try {
+            const { fileName } = req.body.previousProfilePicture;
+            await cloudinary.uploader.destroy(fileName, (err, result) => {
+              if (err) console.log('Error deleting previous profile picture:', err);
+            });
+          } catch (err) {
+            console.error('Error deleting cloudinary link:', err);
+          }
+      }
       })
     }
     res.status(201).json(updatedUser);

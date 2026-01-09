@@ -12,6 +12,7 @@ const notificationSchema = mongoose.Schema({
     },
     message:{
         type: String,
+        maxlength: 250,
     },
     dateSent:{
         type: Number,

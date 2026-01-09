@@ -7,6 +7,8 @@ const {
 const userSchema = mongoose.Schema({
     name:{
         type: String,
+        required: true,
+        maxlength: 50,
     },
     userType:{
         type: String,
@@ -19,9 +21,13 @@ const userSchema = mongoose.Schema({
     },
     email:{
         type: String,
+        required: true,
+        maxlength: 50,
     },
     phone:{
         type: String,
+        required: true,
+        maxlength: 50,
     },
     hashedPassword:{
         type: String,
@@ -47,6 +53,8 @@ const userSchema = mongoose.Schema({
     },
     statement:{
         type: String,
+        required: true,
+        maxlength: 250,
     },
 
     studentBilling: {

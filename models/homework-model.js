@@ -6,9 +6,12 @@ const homeworkSchema = mongoose.Schema({
     },
     name:{
         type: String,
+        required: true,
+        maxlength: 50,
     },
     description:{
         type: String,
+        maxlength: 250,
     },
     dueDate:{
         type: String,
@@ -24,6 +27,8 @@ const homeworkSchema = mongoose.Schema({
     ],
     duration:{
         type: Number,
+        min: 0,
+        max: 999,
     },
     attachment: {
         url:String,
@@ -34,6 +39,8 @@ const homeworkSchema = mongoose.Schema({
     },
     attempts:{
         type: Number,
+        min: 0,
+        max: 999,
     },
     // completed:{
     //     type: Boolean,

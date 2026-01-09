@@ -3,18 +3,24 @@ const mongoose = require('mongoose');
 const schoolSchema = mongoose.Schema({
     name:{
         type: String,
+        required: true,
+        maxlength: 250,
     },
     nationality:{
         type: String,
+        maxlength: 250,
     },
     email:{
         type: String,
+        maxlength: 250,
     },
     phone:{
         type: String,
+        maxlength: 250,
     },
     address:{
         type: String,
+        maxlength: 250,
     },
     hashedPassword:{
         type: String,
@@ -29,6 +35,7 @@ const schoolSchema = mongoose.Schema({
     },
     description:{
         type: String,
+        maxlength: 250,
     },
     backgroundImage: {
         name:String,

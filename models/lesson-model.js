@@ -6,12 +6,15 @@ const lessonSchema = mongoose.Schema({
     },
     name:{
         type: String,
+        required: true,
+        maxlength: 50,
     },
     schoolId:{
         type: String,
     },
     description:{
         type: String,
+        maxlength: 250,
     },
     level: {
         type: Array,
@@ -24,6 +27,8 @@ const lessonSchema = mongoose.Schema({
     },
     duration: {
         type: Number,
+        min: 1, 
+        max: 999,
     },
     teacherId: {
         type:String,
@@ -49,7 +54,9 @@ const lessonSchema = mongoose.Schema({
         {type: String,}
     ],
     casualPrice:{
-        type:Number
+        type:Number,
+        min: 0, 
+        max: 1000,
     },
     status:{
         type:String // started, finished
