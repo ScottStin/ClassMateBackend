@@ -26,7 +26,6 @@ const userSchema = mongoose.Schema({
     },
     phone:{
         type: String,
-        required: true,
         maxlength: 50,
     },
     hashedPassword:{
@@ -53,7 +52,6 @@ const userSchema = mongoose.Schema({
     },
     statement:{
         type: String,
-        required: true,
         maxlength: 250,
     },
 

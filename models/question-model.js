@@ -3,7 +3,7 @@ const MAX_SUB_QUESTIONS = 100;
 
 const questionSchema = mongoose.Schema({
     name: { type: String, required: true, maxlength: 50, },
-    examId: { type: String, required: true },
+    examId: { type: String, required: true }, // note - also used for courses, not just exams
     writtenPrompt: { type: String, default: null, maxlength: 500, },
     teacherFeedback: { type: Boolean, default: null },
     autoMarking: { type: Boolean, default: null },

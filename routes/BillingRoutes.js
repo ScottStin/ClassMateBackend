@@ -121,11 +121,14 @@ router.delete("/payment-method/:userId", async (req, res, next) => {
   }
 });
 
-router.get("/history", async (req, res, next) => {
+router.get("/history/:userId", async (req, res, next) => {
   try {
-    const history = await PaymentHistory.find({
-      userId: req.body.userId
-    }).sort({ createdAt: -1 });
+    console.log(req.params.userId)
+    const history = await PaymentHistory
+      .find({ userId: req.params.userId })
+      .sort({ createdAt: -1 });
+
+    console.log(history);
 
     res.json(history);
   } catch (err) {
@@ -190,6 +193,7 @@ router.post('/charge', async (req, res, next) => {
       stripePaymentIntentId: paymentIntent.id,
       stripeCustomerId: user.studentBilling.stripeCustomerId,
       amount,
+      description,
       currency,
       status: 'paid',
       paymentType: 'student_to_school',
