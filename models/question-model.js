@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const MAX_SUB_QUESTIONS = 100;
+const { courseworkPageElementSchema } = require('./coursework-model');
 
 const questionSchema = mongoose.Schema({
     name: { type: String, required: true, maxlength: 50, },
@@ -29,6 +30,7 @@ const questionSchema = mongoose.Schema({
         leftOption: { type: String, required: true },
         rightOption: { type: String, required: true }
     }],
+    courseworkInfoPageDetails: [courseworkPageElementSchema],
     totalPointsMin: { type: Number, default: 0, max:999, min:0 },
     totalPointsMax: { type: Number, default: 5, max:1000, min:1 },
     length: { type: Number, default: null, min:1, max: 600},
