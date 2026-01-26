@@ -131,4 +131,62 @@ router.post('/new', async (req, res) => {
   }
 });
 
+router.delete('/:id', async (req, res) => {
+  try {
+    const courseId  = req.params.id
+    const course = await courseworkModel.findById(courseId);
+
+    if(!course) {
+      res.status(404).json({ message: "Course not found" });
+      return;
+    }
+
+    const deletedCourse = await courseworkModel.findByIdAndDelete(courseId);
+
+    if (!deletedCourse) {
+      res.status(404).json({ message: "Course not found" });
+    }
+
+    // Delete question
+    await questionModel.deleteMany({ examId: courseId });
+
+    // Delete course prompts (note - we use exam folder for course prompts in cloudinary):
+    const schoolId = deletedCourse.schoolId;
+    const folderPathPrompts = `${schoolId}/exam-prompts/${courseId}`;
+    const { resources: promptFolder } = await cloudinary.api.resources({
+      type: "upload",
+      prefix: folderPathPrompts,
+      max_results: 1
+    });
+    if(promptFolder?.length > 0) {
+      await cloudinary.api.delete_resources_by_prefix(folderPathPrompts);
+      await cloudinary.api.delete_folder(folderPathPrompts);
+    }
+
+    // Delete  cover photo: (todo - move to file service)
+    const folderPathCoverPhoto = `${schoolId}/exam-prompts/${req.params.id}/cover-photo`;
+    const { resources: coverPhotoFolder } = await cloudinary.api.resources({
+      type: "upload",
+      prefix: folderPathCoverPhoto,
+      max_results: 1
+    });
+
+    if(coverPhotoFolder?.length > 0) {
+      await cloudinary.api.delete_resources_by_prefix(folderPathCoverPhoto);
+      await cloudinary.api.delete_folder(folderPathCoverPhoto);
+    }
+
+    res.status(200).json(deletedCourse);
+
+    // // Emit event to all student's in school
+    // if(deletedCourse?.schoolId) {
+    //   const io = getIo();
+    //   io.emit('courseEvent-' + deletedCourse.schoolId, {action: 'courseDeleted', data: deletedCourse});
+    // }
+  } catch (error) {
+    console.error("Error deleting course:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 module.exports = router;
