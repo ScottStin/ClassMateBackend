@@ -123,10 +123,46 @@ router.post('/new', async (req, res) => {
     // Emit event to all student's in school
     if(createdCourse?.schoolId) {
       const io = getIo();
-      io.emit('courseworkEvent-' + createdCourse.schoolId, {action: 'courseCreated', data: createdCourse});
+      io.emit('courseEvent-' + createdCourse.schoolId, {action: 'courseCreated', data: createdCourse});
     }
   } catch (error) {
     console.error("Error creating new course or adding questions:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/enrol-students/:id', async (req, res) => {
+  try {
+    const course = await courseworkModel.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json('Course not found');
+    }
+
+    const studentIds = req.body.studentIds;
+
+    // Remove students not in req.body from course.studentsEnrolledIds
+    course.studentsEnrolled = course.studentsEnrolled.filter(
+      (id) => studentIds.some((student) => student._id === id)
+    );
+
+    // Add new students to course.studentsEnrolled
+    for(const studentId of studentIds) {
+      if (course.studentsEnrolled.includes(studentId)) {
+        continue
+      }
+      course.studentsEnrolled.push(studentId);
+    }
+    await course.save();
+    res.json(course);
+
+
+    if(course?.schoolId) {
+      const io = getIo();
+      io.emit('courseEvent-' + course.schoolId, {action: 'courseUpdated', data: course});
+    }
+  } catch (error) {
+    console.error("Error enrolling students in course:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -178,11 +214,11 @@ router.delete('/:id', async (req, res) => {
 
     res.status(200).json(deletedCourse);
 
-    // // Emit event to all student's in school
-    // if(deletedCourse?.schoolId) {
-    //   const io = getIo();
-    //   io.emit('courseEvent-' + deletedCourse.schoolId, {action: 'courseDeleted', data: deletedCourse});
-    // }
+    // Emit event to all student's in school
+    if(deletedCourse?.schoolId) {
+      const io = getIo();
+      io.emit('courseEvent-' + deletedCourse.schoolId, {action: 'courseDeleted', data: deletedCourse});
+    }
   } catch (error) {
     console.error("Error deleting course:", error);
     res.status(500).send("Internal Server Error");

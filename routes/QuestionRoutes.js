@@ -458,4 +458,38 @@ router.patch('/submit-feedback/:id', async function (req, res) {
     }
   });
 
+router.patch('/mark-current-question-as-complete/:id', async function (req, res) {
+  try {
+    const questionId = req.params.id;
+    const studentId = req.body.currentUserId;
+
+    const foundQuestion = await questionModel.findById(questionId);
+    if (!foundQuestion) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    if (!foundQuestion.studentsCompleted) {
+        foundQuestion.studentsCompleted = [];
+    }
+
+    const alreadyExists = foundQuestion.studentsCompleted.some(
+      sc => sc.studentId.toString() === studentId
+    );
+
+    if (!alreadyExists) {
+      foundQuestion.studentsCompleted.push({
+        studentId,
+        dateComplete: new Date()
+      });
+
+      await foundQuestion.save();
+    }
+
+    return res.json(foundQuestion);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

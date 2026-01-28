@@ -51,6 +51,10 @@ const questionSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'questionModel'
     }],
+    studentsCompleted: [{
+        studentId: { type: String },
+        dateComplete: { type: Date, default: null },
+    }], // for coursework only
     studentResponse: [{
         studentId: { type: String, default: null },
         response: { type: String, default: null },
