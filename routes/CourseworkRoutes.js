@@ -167,6 +167,35 @@ router.patch('/enrol-students/:id', async (req, res) => {
   }
 });
 
+router.patch('/register/:id', async (req, res) => {
+  try {
+    const course = await courseworkModel.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json('Course not found');
+    }
+
+    const userId = req.body._id;
+
+    if (course.studentsEnrolled.includes(userId)) {
+      return res.status(400).json('User has already signed up for this course');
+    }
+
+    course.studentsEnrolled.push(userId);
+    await course.save();
+
+    res.json(`Student added to: ${course}`);
+
+    if(course?.schoolId) {
+      const io = getIo();
+      io.emit('courseEvent-' + course.schoolId, {action: 'courseUpdated', data: course});
+    }
+  } catch (error) {
+    console.error("Error joining course:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const courseId  = req.params.id
