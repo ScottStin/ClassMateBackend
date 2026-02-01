@@ -196,6 +196,73 @@ router.patch('/register/:id', async (req, res) => {
   }
 });
 
+router.patch('/update-course/:id', async (req, res) => {
+  try {
+    console.log(req.body);
+    const courseData = req.body.courseData;
+    const course = await courseworkModel.findById(req.params.id);
+
+    if (!course) {
+      return res.status(404).json('Course not found');
+    }
+
+    const { courseCoverPhoto, ...courseDataWithoutPhoto } = courseData;
+
+    Object.assign(course, courseDataWithoutPhoto);
+
+    // --- upload photo to cloudinary:
+    if(courseData.courseCoverPhoto?.url) {
+      // Delete old cover photo: (todo - move to file service)
+      const schoolId = courseData.schoolId;
+      const folderPathCoverPhoto = `${schoolId}/exam-prompts/${req.params.id}/cover-photo`;
+      const { resources: coverPhotoFolder } = await cloudinary.api.resources({
+        type: "upload",
+        prefix: folderPathCoverPhoto,
+        max_results: 1
+      });
+
+      if(coverPhotoFolder?.length > 0) {
+        await cloudinary.api.delete_resources_by_prefix(folderPathCoverPhoto);
+        await cloudinary.api.delete_folder(folderPathCoverPhoto);
+      }
+    
+      // upload new cover photo:
+      await cloudinary.uploader.upload(courseData.courseCoverPhoto.url, {folder: `${courseData.schoolId}/exam-prompts/${course._id}/cover-photo`}, async (err, result)=>{
+        if (err) return console.log(err);  
+        course.courseCoverPhoto = {url:result.url, fileName:result.public_id};
+      })
+    }
+
+    await course.save();
+ 
+    for (const question of req.body.questions){
+      const foundQuestion = await questionModel.findById(question.questionId);
+      if(!foundQuestion) {
+        continue;
+      }
+      foundQuestion.name = question.updatedQuestionName
+      await foundQuestion.save();
+    }
+
+    course.questions = req.body.questions.map((q) => {
+      return {
+        questionId: q.questionId,
+        studentsCompleted: q.studentsCompleted
+      };
+    });
+    await course.save();
+    res.json(`Course updated: ${course._id}`);
+
+    if(course?.schoolId) {
+      const io = getIo();
+      io.emit('courseEvent-' + course.schoolId, {action: 'courseUpdated', data: course});
+    }
+  } catch (error) {
+    console.error("Error updating course:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const courseId  = req.params.id
