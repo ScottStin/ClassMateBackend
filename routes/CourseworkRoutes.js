@@ -5,7 +5,7 @@ const { courseworkModel } = require('../models/coursework-model');
 const questionModel = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
-const examRoutes = require('./ExamRoutes');
+const { createQuestion } = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
     try {
@@ -40,75 +40,15 @@ router.post('/new', async (req, res) => {
     // --- create course:
     const createdCourse = await courseworkModel.create(req.body.courseData);
 
+    // --- add questions:
     const questionIds = [];
     for (let question of req.body.questions) {
-      const { subQuestions, id, ...questionData } = question;
-
-      // Add courseworkId of newly created course to questionData:
-      questionData.examId = createdCourse._id; // note - we're using examId for courses as well, not just exams
-
-    //   // --- upload prompt to cloudinary and add to question (if prompt exists):
-      if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
-        questionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, req.body.examData.schoolId, createdExam._id)
-      }
-      if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
-        questionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, req.body.examData.schoolId, createdExam._id)
-      }
-      if (questionData.prompt3?.fileString && questionData.prompt3?.type) {
-        questionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, req.body.examData.schoolId, createdExam._id)
-      }
-  
-      // --- Create parent question:
-      const createdQuestion = await questionModel.create(questionData);
-
-      // --- check if question has sub questions, and if so, save them:
-      if (subQuestions?.length > 0) {
-        for (let subQuestion of subQuestions) {
-          const { id, ...questionWithoutId } = subQuestion;
-          const subQuestionData = {
-            ...questionWithoutId,
-            parent: createdQuestion.id,
-            examId: createdCourse._id, // Add examId (coursework id) to sub question
-          };
-
-        //   // --- Upload sub-question prompts if they exist:
-          if (subQuestionData.prompt1?.fileString && subQuestionData.prompt1?.type) {
-            subQuestionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(
-              subQuestionData.prompt1.fileString,
-              subQuestionData.prompt1.type,
-              req.body.courseData.schoolId,
-              createdCourse._id
-            );
-          }
-
-          if (subQuestionData.prompt2?.fileString && subQuestionData.prompt2?.type) {
-            subQuestionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(
-              subQuestionData.prompt2.fileString,
-              subQuestionData.prompt2.type,
-              req.body.courseData.schoolId,
-              createdCourse._id
-            );
-          }
-
-          if (subQuestionData.prompt3?.fileString && subQuestionData.prompt3?.type) {
-            subQuestionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(
-              subQuestionData.prompt3.fileString,
-              subQuestionData.prompt3.type,
-              req.body.courseData.schoolId,
-              createdCourse._id
-            );
-          }
-
-          const createdSubQuestion = await questionModel.create(subQuestionData);
-          createdQuestion.subQuestions.push(createdSubQuestion.id);
-          await createdQuestion.save();
-        }
-      }
+      const createdQuestion = await createQuestion(question, createdCourse._id, req.body.schoolId);
       questionIds.push({questionId: createdQuestion.id, studentsCompleted: []});
     }
     createdCourse.questions = questionIds;
 
-    // --- upload photo to cloudinary:
+    // --- upload photo to cloudinary (todo - move ot service):
     if(createdCourse.courseCoverPhoto?.url) {
       await cloudinary.uploader.upload(createdCourse.courseCoverPhoto.url, {folder: `${req.body.courseData.schoolId}/exam-prompts/${createdCourse._id}/cover-photo`}, async (err, result)=>{
         if (err) return console.log(err);  
@@ -117,7 +57,6 @@ router.post('/new', async (req, res) => {
     }
 
     await createdCourse.save();
-
     res.status(201).json(createdCourse);
 
     // Emit event to all student's in school
@@ -198,9 +137,11 @@ router.patch('/register/:id', async (req, res) => {
 
 router.patch('/update-course/:id', async (req, res) => {
   try {
-    console.log(req.body);
     const courseData = req.body.courseData;
     const course = await courseworkModel.findById(req.params.id);
+
+    console.log('COURS E 1');
+    console.log(course);
 
     if (!course) {
       return res.status(404).json('Course not found');
@@ -235,13 +176,20 @@ router.patch('/update-course/:id', async (req, res) => {
 
     await course.save();
  
-    for (const question of req.body.questions){
-      const foundQuestion = await questionModel.findById(question.questionId);
-      if(!foundQuestion) {
-        continue;
+    for (const question of req.body.questions) {
+
+      const existingQuestionEntry = course.questions.find(q => q._id === question._id);
+      const foundQuestion = await questionModel.findById(question._id); // double check all questions
+  
+      if (question._id && (existingQuestionEntry || foundQuestion)) {
+        // --- update existing question
+        foundQuestion.name = question.name;
+        await foundQuestion.save();
+      } else {
+        // --- add new question
+        const createdQuestion = await createQuestion(question, course._id, course.schoolId);
+        course.questions.push({ questionId: createdQuestion._id, studentsCompleted: [] });
       }
-      foundQuestion.name = question.updatedQuestionName
-      await foundQuestion.save();
     }
 
     course.questions = req.body.questions.map((q) => {

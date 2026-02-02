@@ -121,6 +121,7 @@ const questionModel = require('./models/question-model');
 const homeworkModel = require('./models/homework-model');
 const notificationModel = require('./models/notification-model');
 const conversationModel = require('./models/conversation-model');
+const courseworkModel = require('./models/coursework-model');
 
 /**
  * ==============================
@@ -185,9 +186,9 @@ app.get('/test', (req, res) => {
 const lessonRouter = require('./routes/LessonRoutes');
 const userRouter = require('./routes/UserRoutes');
 const lessonTypeRouter = require('./routes/LessonTypeRoutes');
-const examRouter = require('./routes/ExamRoutes');
+const { router: examRouter } = require('./routes/ExamRoutes');
 const schoolRouter = require('./routes/SchoolRoutes');
-const questionRouter = require('./routes/QuestionRoutes');
+const { router: questionRouter } = require('./routes/QuestionRoutes');
 const homeworkRouter = require('./routes/HomeworkRoute');
 const notificationRouter = require('./routes/NotificationRoutes');
 const messengerRouter = require('./routes/MessengerRoutes');

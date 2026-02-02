@@ -27,7 +27,7 @@ const courseworkSchema = new mongoose.Schema({
     },
     questions: [
       {
-            questionId: { type: String },
+            _id: { type: String },
             studentsCompleted: [{type: String}]
        }
     ],

@@ -6,6 +6,7 @@ const { getIo } = require('../socket-io');
 const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
 const userModel = require("../models/user-models");
+const examRoutes = require('./ExamRoutes');
 
 /**
  * Get all exam questions
@@ -33,6 +34,74 @@ router.get('/', async function (req, res) {
         res.status(500).send("Internal Server Error");
     }
 });
+
+/**
+ * Create Question
+ */
+
+async function createQuestion(question, examId, schoolId) {
+    const { subQuestions, id, ...questionData } = question;
+      questionData.examId = examId; // note - we're using examId for courses as well, not just exams
+
+      // --- upload prompt to cloudinary and add to question (if prompt exists):
+      if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
+        questionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, schoolId, examId)
+      }
+      if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
+        questionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, schoolId, examId)
+      }
+      if (questionData.prompt3?.fileString && questionData.prompt3?.type) {
+        questionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, schoolId, examId)
+      }
+  
+      // --- Create parent question:
+      const createdQuestion = await questionModel.create(questionData);
+
+      // --- check if question has sub questions, and if so, save them:
+      if (subQuestions?.length > 0) {
+        for (let subQuestion of subQuestions) {
+          const { id, ...questionWithoutId } = subQuestion;
+          const subQuestionData = {
+            ...questionWithoutId,
+            parent: createdQuestion.id,
+            examId: examId, // Add examId (coursework id) to sub question
+          };
+
+        //   // --- Upload sub-question prompts if they exist:
+          if (subQuestionData.prompt1?.fileString && subQuestionData.prompt1?.type) {
+            subQuestionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(
+              subQuestionData.prompt1.fileString,
+              subQuestionData.prompt1.type,
+              schoolId,
+              examId
+            );
+          }
+
+          if (subQuestionData.prompt2?.fileString && subQuestionData.prompt2?.type) {
+            subQuestionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(
+              subQuestionData.prompt2.fileString,
+              subQuestionData.prompt2.type,
+              schoolId,
+              examId
+            );
+          }
+
+          if (subQuestionData.prompt3?.fileString && subQuestionData.prompt3?.type) {
+            subQuestionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(
+              subQuestionData.prompt3.fileString,
+              subQuestionData.prompt3.type,
+              schoolId,
+              examId
+            );
+          }
+
+          const createdSubQuestion = await questionModel.create(subQuestionData);
+          createdQuestion.subQuestions.push(createdSubQuestion.id);
+          await createdQuestion.save();
+        }
+      }
+      return {questionId: createdQuestion.id, studentsCompleted: []};
+}
 
 /**
  * Submit student's exam question responses
@@ -492,4 +561,8 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
   }
 });
 
-module.exports = router;
+module.exports = {
+  router,
+  createQuestion
+};
+
