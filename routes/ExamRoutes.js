@@ -5,6 +5,7 @@ const examModel = require('../models/exam-model');
 const questionModel = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
+const { createQuestion, deleteQuestion } = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
     try {
@@ -41,70 +42,9 @@ router.post('/new', async (req, res) => {
 
     const questionIds = [];
     for (let question of req.body.questions) {
-      const { subQuestions, id, ...questionData } = question;
-
-      // Add examId of newly created exam to questionData:
-      questionData.examId = createdExam._id;
-
-      // --- upload prompt to cloudinary and add to question (if prompt exists):
-      if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
-        questionData.prompt1.fileString = await saveExamQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, req.body.examData.schoolId, createdExam._id)
-      }
-      if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
-        questionData.prompt2.fileString = await saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, req.body.examData.schoolId, createdExam._id)
-      }
-      if (questionData.prompt3?.fileString && questionData.prompt3?.type) {
-        questionData.prompt3.fileString = await saveExamQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, req.body.examData.schoolId, createdExam._id)
-      }
-  
-      // --- Create parent question:
-      const createdQuestion = await questionModel.create(questionData);
-
-      // --- check if question has sub questions, and if so, save them:
-      if (subQuestions?.length > 0) {
-        for (let subQuestion of subQuestions) {
-          const { id, ...questionWithoutId } = subQuestion;
-          const subQuestionData = {
-            ...questionWithoutId,
-            parent: createdQuestion.id,
-            examId: createdExam._id, // Add examId to sub question
-          };
-
-          // --- Upload sub-question prompts if they exist:
-          if (subQuestionData.prompt1?.fileString && subQuestionData.prompt1?.type) {
-            subQuestionData.prompt1.fileString = await saveExamQuestionPrompt(
-              subQuestionData.prompt1.fileString,
-              subQuestionData.prompt1.type,
-              req.body.examData.schoolId,
-              createdExam._id
-            );
-          }
-
-          if (subQuestionData.prompt2?.fileString && subQuestionData.prompt2?.type) {
-            subQuestionData.prompt2.fileString = await saveExamQuestionPrompt(
-              subQuestionData.prompt2.fileString,
-              subQuestionData.prompt2.type,
-              req.body.examData.schoolId,
-              createdExam._id
-            );
-          }
-
-          if (subQuestionData.prompt3?.fileString && subQuestionData.prompt3?.type) {
-            subQuestionData.prompt3.fileString = await saveExamQuestionPrompt(
-              subQuestionData.prompt3.fileString,
-              subQuestionData.prompt3.type,
-              req.body.examData.schoolId,
-              createdExam._id
-            );
-          }
-
-          const createdSubQuestion = await questionModel.create(subQuestionData);
-          createdQuestion.subQuestions.push(createdSubQuestion.id);
-          await createdQuestion.save();
-        }
-      }
-      questionIds.push(createdQuestion.id);
-    }
+      const createdQuestion = await createQuestion(question, createdExam._id, req.body.schoolId);
+      questionIds.push(createdQuestion.questionId.toString());
+     }
     createdExam.questions = questionIds;
 
     // --- upload photo to cloudinary:
@@ -223,17 +163,77 @@ router.patch('/update-exam/:id', async (req, res) => {
 
     await exam.save();
  
-    for (const question of req.body.questions){
-      const foundQuestion = await questionModel.findById(question.questionId);
-      if(!foundQuestion) {
-        continue;
+    // ---------------- NORMALIZE ----------------
+    const getQid = q => (q._id || q.questionId || q).toString();
+
+    const incoming = req.body.questions || [];
+    const incomingIds = incoming.map(getQid);
+
+    // const existing = exam.questions || [];
+    // const existingIds = existing.map(getQid);
+
+    const dbQuestions = await questionModel.find(
+      { examId: exam._id },
+      { _id: 1 }
+    );
+
+    const dbIds = dbQuestions.map(q => q._id.toString());
+
+    // ---------------- DIFF ----------------
+    const idsToDelete = dbIds.filter(id => !incomingIds.includes(id));
+    const idsToAdd    = incomingIds.filter(id => !dbIds.includes(id));
+    const idsToUpdate = incomingIds.filter(id => dbIds.includes(id));
+
+    // ---------------- DELETE ----------------
+    if (idsToDelete.length) {
+      const deleteDocs = await questionModel.find({
+        _id: { $in: idsToDelete }
+      });
+
+      for (const q of deleteDocs) {
+        await deleteQuestion(q, exam._id, exam.schoolId);
       }
-      foundQuestion.name = question.updatedQuestionName
-      await foundQuestion.save();
     }
 
-    exam.questions = req.body.questions.map((q) => q.questionId);
+    // ---------------- UPDATE ----------------
+    for (const q of incoming.filter(q => idsToUpdate.includes(getQid(q)))) {
+      const doc = await questionModel.findById(getQid(q));
+      if (doc) {
+        doc.name = q.name;
+        await doc.save();
+      }
+    }
+
+    // ---------------- ADD ----------------
+    for (const q of incoming.filter(q => idsToAdd.includes(getQid(q)))) {
+      const sanitized = { ...q };
+      delete sanitized._id;
+
+      const created = await createQuestion(
+        sanitized,
+        exam._id,
+        exam.schoolId
+      );
+
+      console.log(created);
+      exam.questions.push((created._id ?? created.questionId).toString());
+    }
+
+    // ---------------- REBUILD EXAM QUESTIONS ----------------
+    const finalQuestions = await questionModel.find(
+      { examId: exam._id },
+      { _id: 1 }
+    );
+
+    exam.questions = finalQuestions.map(q => q._id.toString());
+
     await exam.save();
+  
+    // await questionModel.deleteMany({
+    //   examId: exam._id,
+    //   _id: { $nin: incomingIds.filter((id) => typeof id === 'string' && id !== '[object Object]') }
+    // });
+
     res.json(`Exam updated: ${exam._id}`);
 
     if(exam?.schoolId) {

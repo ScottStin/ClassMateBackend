@@ -250,8 +250,6 @@ router.patch('/update-course/:id', async (req, res) => {
     //   _id: { $nin: incomingIds.filter((id) => typeof id === 'string' && id !== '[object Object]') }
     // });
 
-    console.log('hit 5')
-
     res.json(`Course updated: ${course._id}`);
 
     if(course?.schoolId) {
