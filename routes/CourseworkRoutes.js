@@ -5,7 +5,7 @@ const { courseworkModel } = require('../models/coursework-model');
 const questionModel = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
-const { createQuestion } = require('./QuestionRoutes');
+const { createQuestion, deleteQuestion } = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
     try {
@@ -44,7 +44,7 @@ router.post('/new', async (req, res) => {
     const questionIds = [];
     for (let question of req.body.questions) {
       const createdQuestion = await createQuestion(question, createdCourse._id, req.body.schoolId);
-      questionIds.push({questionId: createdQuestion.id, studentsCompleted: []});
+      questionIds.push({questionId: createdQuestion.questionId, studentsCompleted: []});
     }
     createdCourse.questions = questionIds;
 
@@ -140,9 +140,6 @@ router.patch('/update-course/:id', async (req, res) => {
     const courseData = req.body.courseData;
     const course = await courseworkModel.findById(req.params.id);
 
-    console.log('COURS E 1');
-    console.log(course);
-
     if (!course) {
       return res.status(404).json('Course not found');
     }
@@ -176,29 +173,85 @@ router.patch('/update-course/:id', async (req, res) => {
 
     await course.save();
  
-    for (const question of req.body.questions) {
+    // ---------------- NORMALIZE ----------------
+    const getQid = q => (q._id || q.questionId || q).toString();
 
-      const existingQuestionEntry = course.questions.find(q => q._id === question._id);
-      const foundQuestion = await questionModel.findById(question._id); // double check all questions
-  
-      if (question._id && (existingQuestionEntry || foundQuestion)) {
-        // --- update existing question
-        foundQuestion.name = question.name;
-        await foundQuestion.save();
-      } else {
-        // --- add new question
-        const createdQuestion = await createQuestion(question, course._id, course.schoolId);
-        course.questions.push({ questionId: createdQuestion._id, studentsCompleted: [] });
+    const incoming = req.body.questions || [];
+    const incomingIds = incoming.map(getQid);
+
+    // const existing = course.questions || [];
+    // const existingIds = existing.map(getQid);
+
+    const dbQuestions = await questionModel.find(
+      { examId: course._id },
+      { _id: 1 }
+    );
+
+    const dbIds = dbQuestions.map(q => q._id.toString());
+
+    // ---------------- DIFF ----------------
+    const idsToDelete = dbIds.filter(id => !incomingIds.includes(id));
+    const idsToAdd    = incomingIds.filter(id => !dbIds.includes(id));
+    const idsToUpdate = incomingIds.filter(id => dbIds.includes(id));
+
+    // ---------------- DELETE ----------------
+    if (idsToDelete.length) {
+      const deleteDocs = await questionModel.find({
+        _id: { $in: idsToDelete }
+      });
+
+      for (const q of deleteDocs) {
+        await deleteQuestion(q, course._id, course.schoolId);
       }
     }
 
-    course.questions = req.body.questions.map((q) => {
-      return {
-        questionId: q.questionId,
-        studentsCompleted: q.studentsCompleted
-      };
-    });
+    // ---------------- UPDATE ----------------
+    for (const q of incoming.filter(q => idsToUpdate.includes(getQid(q)))) {
+      const doc = await questionModel.findById(getQid(q));
+      if (doc) {
+        doc.name = q.name;
+        await doc.save();
+      }
+    }
+
+    // ---------------- ADD ----------------
+    for (const q of incoming.filter(q => idsToAdd.includes(getQid(q)))) {
+      const sanitized = { ...q };
+      delete sanitized._id;
+
+      const created = await createQuestion(
+        sanitized,
+        course._id,
+        course.schoolId
+      );
+
+      course.questions.push({
+        questionId: created._id,
+        studentsCompleted: []
+      });
+    }
+
+    // ---------------- REBUILD COURSE QUESTIONS ----------------
+    const finalQuestions = await questionModel.find(
+      { examId: course._id },
+      { _id: 1 }
+    );
+
+    course.questions = finalQuestions.map(q => ({
+      questionId: q._id,
+      studentsCompleted: []
+    }));
+
+
     await course.save();
+  
+    // await questionModel.deleteMany({
+    //   examId: course._id,
+    //   _id: { $nin: incomingIds.filter((id) => typeof id === 'string' && id !== '[object Object]') }
+    // });
+
+    console.log('hit 5')
+
     res.json(`Course updated: ${course._id}`);
 
     if(course?.schoolId) {

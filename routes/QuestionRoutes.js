@@ -104,6 +104,28 @@ async function createQuestion(question, examId, schoolId) {
 }
 
 /**
+ * Delete Question
+ */
+async function deleteQuestion(question, examId, schoolId) {
+  // --- delete question document
+  await questionModel.findByIdAndDelete(question._id || question.questionId);
+
+  // --- delete prompt assets
+  const deleteAsset = async (fileString) => {
+    if (!fileString) return;
+    try {
+      await cloudinary.uploader.destroy(fileString);
+    } catch (err) {
+      console.error(`Error deleting Cloudinary asset ${fileString}:`, err);
+    }
+  };
+
+  await deleteAsset(question.prompt1?.fileString);
+  await deleteAsset(question.prompt2?.fileString);
+  await deleteAsset(question.prompt3?.fileString);
+}
+
+/**
  * Submit student's exam question responses
  */
 router.patch('/submit-exam/:id', async function (req, res) {
@@ -563,6 +585,7 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
 
 module.exports = {
   router,
-  createQuestion
+  createQuestion,
+  deleteQuestion
 };
 
