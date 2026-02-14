@@ -14,7 +14,8 @@ const questionSchema = mongoose.Schema({
     partialMarking: { type: Boolean, default: null },
     multipleChoiceQuestionList: [{
         text: { type: String, required: true },
-        correct: { type: Boolean, required: true }
+        correct: { type: Boolean, required: true },
+        incorrectMessageHint: { type: String, required: false, maxlength: 500},
     }],
     reorderSentenceQuestionList: [{
         text: { type: String, required: true },
@@ -23,7 +24,8 @@ const questionSchema = mongoose.Schema({
         text: { type: String, required: true },
         blanks: [{
         text: { type: String },
-        correctSelectOptionIndex: { type: Number, default: null }
+        correctSelectOptionIndex: { type: Number, default: null },
+        incorrectMessageHint: { type: String, required: false, maxlength: 500},
         }]
     }],
     matchOptionQuestionList: [{
@@ -35,6 +37,8 @@ const questionSchema = mongoose.Schema({
     totalPointsMax: { type: Number, default: 5, max:1000, min:1 },
     length: { type: Number, default: null, min:1, max: 600},
     limitAudioAttempts: { type: Number, default: null, min:1, max: 10},
+    correctMessageHint: { type: String, required: false, maxlength: 500},
+    incorrectMessageHint: { type: String, required: false, maxlength: 500},
     prompt1: {
         fileString: { type: String, default: null },
         type: { type: String, default: null },
