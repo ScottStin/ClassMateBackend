@@ -6,7 +6,6 @@ const { getIo } = require('../socket-io');
 const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
 const userModel = require("../models/user-models");
-const examRoutes = require('./ExamRoutes');
 
 /**
  * Get all exam questions
@@ -45,13 +44,13 @@ async function createQuestion(question, examId, schoolId) {
 
       // --- upload prompt to cloudinary and add to question (if prompt exists):
       if (questionData.prompt1?.fileString && questionData.prompt1?.type) {
-        questionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, schoolId, examId)
+        questionData.prompt1.fileString = await saveQuestionPrompt(questionData.prompt1.fileString, questionData.prompt1?.type, schoolId, examId)
       }
       if (questionData.prompt2?.fileString && questionData.prompt2?.type) {
-        questionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, schoolId, examId)
+        questionData.prompt2.fileString = await saveQuestionPrompt(questionData.prompt2.fileString, questionData.prompt2?.type, schoolId, examId)
       }
       if (questionData.prompt3?.fileString && questionData.prompt3?.type) {
-        questionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, schoolId, examId)
+        questionData.prompt3.fileString = await saveQuestionPrompt(questionData.prompt3.fileString, questionData.prompt3?.type, schoolId, examId)
       }
   
       // --- Create parent question:
@@ -69,7 +68,7 @@ async function createQuestion(question, examId, schoolId) {
 
         //   // --- Upload sub-question prompts if they exist:
           if (subQuestionData.prompt1?.fileString && subQuestionData.prompt1?.type) {
-            subQuestionData.prompt1.fileString = await examRoutes.saveExamQuestionPrompt(
+            subQuestionData.prompt1.fileString = await saveQuestionPrompt(
               subQuestionData.prompt1.fileString,
               subQuestionData.prompt1.type,
               schoolId,
@@ -78,7 +77,7 @@ async function createQuestion(question, examId, schoolId) {
           }
 
           if (subQuestionData.prompt2?.fileString && subQuestionData.prompt2?.type) {
-            subQuestionData.prompt2.fileString = await examRoutes.saveExamQuestionPrompt(
+            subQuestionData.prompt2.fileString = await saveQuestionPrompt(
               subQuestionData.prompt2.fileString,
               subQuestionData.prompt2.type,
               schoolId,
@@ -87,7 +86,7 @@ async function createQuestion(question, examId, schoolId) {
           }
 
           if (subQuestionData.prompt3?.fileString && subQuestionData.prompt3?.type) {
-            subQuestionData.prompt3.fileString = await examRoutes.saveExamQuestionPrompt(
+            subQuestionData.prompt3.fileString = await saveQuestionPrompt(
               subQuestionData.prompt3.fileString,
               subQuestionData.prompt3.type,
               schoolId,
@@ -582,6 +581,29 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
     return res.status(500).json({ message: 'Server error' });
   }
 });
+
+
+/**
+ * Save image/audio for exam question prompt to cloudinary
+ */
+
+async function saveQuestionPrompt(base64ExamPrompt, promptType, schoolId, examId) {
+    const maxFileSizeMb = 10; // 10MB
+    const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+
+    // --- Estimate the Base64 file size before uploading - TODO - move to service
+    const sizeInBytes = Buffer.byteLength(base64ExamPrompt, 'base64');
+    if (sizeInBytes > maxFileSizeBytes) {
+        throw new Error(`File too large. Max allowed size is ${maxFileSizeMb} MB.`);
+    }
+
+    const result = await cloudinary.uploader.upload(base64ExamPrompt, {
+        folder: `${schoolId}/exam-prompts/${examId}`,
+        resource_type: promptType === 'audio' ? 'video' : 'image' // Specify 'video' for audio files. Otherwise, upload an image
+    }); // todo - move to service
+  
+  return result.secure_url;
+}
 
 module.exports = {
   router,

@@ -74,28 +74,6 @@ router.post('/new', async (req, res) => {
   }
 });
 
-/**
- * Save image/audio for exam question prompt to cloudinary
- */
-
-async function saveExamQuestionPrompt(base64ExamPrompt, promptType, schoolId, examId) {
-    const maxFileSizeMb = 10; // 10MB
-    const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
-
-    // --- Estimate the Base64 file size before uploading - TODO - move to service
-    const sizeInBytes = Buffer.byteLength(base64ExamPrompt, 'base64');
-    if (sizeInBytes > maxFileSizeBytes) {
-        throw new Error(`File too large. Max allowed size is ${maxFileSizeMb} MB.`);
-    }
-
-    const result = await cloudinary.uploader.upload(base64ExamPrompt, {
-        folder: `${schoolId}/exam-prompts/${examId}`,
-        resource_type: promptType === 'audio' ? 'video' : 'image' // Specify 'video' for audio files. Otherwise, upload an image
-    }); // todo - move to service
-  
-  return result.secure_url;
-}
-
 router.patch('/register/:id', async (req, res) => {
   try {
     const exam = await examModel.findById(req.params.id);
@@ -474,5 +452,4 @@ router.delete('/:id', async (req, res) => {
 
 module.exports = {
   router,
-  saveExamQuestionPrompt
 };
