@@ -5,6 +5,9 @@ const examModel = require('../models/exam-model');
 const questionModel = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
+const {
+  deleteCloudinaryFolderIfExists
+} = require('../file-helper.js');
 const { createQuestion, deleteQuestion } = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
@@ -375,9 +378,65 @@ router.patch('/un-enrol-student-from-exam/:id', async (req, res) => {
   }
 });
 
+router.delete('/bulk-delete', async (req, res) => {
+  try {
+    const examIds = req.body;
+
+    if (!Array.isArray(examIds) || examIds.length === 0) {
+      return res.status(400).json({ message: 'No exams provided' });
+    }
+
+    // Find exams first so we can return + emit them
+    const examsToDelete = await examModel.find({ _id: { $in: examIds } });
+
+    if (examsToDelete.length === 0) {
+      return res.status(404).json({ message: 'No exams found' });
+    }
+
+    // Delete related questions (like single delete does)
+    await questionModel.deleteMany({ examId: { $in: examIds } });
+
+    // Delete cloudinary folders for each exam
+    for (const exam of examsToDelete) {
+      const schoolId = exam.schoolId;
+      const examId = exam._id;
+
+      // Prompts
+      const folderPathPrompts = `${schoolId}/exam-prompts/${examId}`;
+      await deleteCloudinaryFolderIfExists(folderPathPrompts);
+
+      // Responses
+      const folderPathResponses = `${schoolId}/exam-question-responses/${examId}`;
+      await deleteCloudinaryFolderIfExists(folderPathResponses);
+
+      // Cover photo
+      const folderPathCoverPhoto = `${schoolId}/exam-prompts/${examId}/cover-photo`;
+      await deleteCloudinaryFolderIfExists(folderPathCoverPhoto);
+    }
+
+    // Now delete exams
+    await examModel.deleteMany({ id: { $in: examIds } });
+
+    res.status(200).json(examsToDelete);
+
+    // Emit socket events
+    const io = getIo();
+    examsToDelete.forEach(exam => {
+      io.emit(
+        'examEvent-' + exam.schoolId,
+        { action: 'examDeleted', data: exam }
+      );
+    });
+
+  } catch (error) {
+    console.error('Error bulk deleting exams:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
-    const examId  = req.params.id
+    const examId  = req.params.id;
     const exam = await examModel.findById(examId);
 
     if(!exam) {
@@ -394,56 +453,37 @@ router.delete('/:id', async (req, res) => {
 
     if (!deletedExam) {
       res.status(404).json({ message: "Exam not found" });
+      return;
     }
 
-    // Delete question
+    // Delete questions
     await questionModel.deleteMany({ examId });
 
-    // Delete exam prompts:
     const schoolId = deletedExam.schoolId;
+
+    // Delete exam prompts
     const folderPathPrompts = `${schoolId}/exam-prompts/${examId}`;
-    const { resources: promptFolder } = await cloudinary.api.resources({
-      type: "upload",
-      prefix: folderPathPrompts,
-      max_results: 1
-    });
-    if(promptFolder?.length > 0) {
-      await cloudinary.api.delete_resources_by_prefix(folderPathPrompts);
-      await cloudinary.api.delete_folder(folderPathPrompts);
-    }
+    await deleteCloudinaryFolderIfExists(folderPathPrompts);
 
-    // Delete exam responses:
+    // Delete exam responses
     const folderPathResponses = `${schoolId}/exam-question-responses/${examId}`;
-    const { resources: responseFolder }  = await cloudinary.api.resources({
-      type: "upload",
-      prefix: folderPathResponses,
-      max_results: 1
-    });
-    if(responseFolder?.length > 0) {
-      await cloudinary.api.delete_resources_by_prefix(folderPathResponses);
-      await cloudinary.api.delete_folder(folderPathResponses);
-    }
+    await deleteCloudinaryFolderIfExists(folderPathResponses);
 
-    // Delete  cover photo: (todo - move to file service)
-    const folderPathCoverPhoto = `${schoolId}/exam-prompts/${req.params.id}/cover-photo`;
-    const { resources: coverPhotoFolder } = await cloudinary.api.resources({
-      type: "upload",
-      prefix: folderPathCoverPhoto,
-      max_results: 1
-    });
-
-    if(coverPhotoFolder?.length > 0) {
-      await cloudinary.api.delete_resources_by_prefix(folderPathCoverPhoto);
-      await cloudinary.api.delete_folder(folderPathCoverPhoto);
-    }
+    // Delete cover photo
+    const folderPathCoverPhoto = `${schoolId}/exam-prompts/${examId}/cover-photo`;
+    await deleteCloudinaryFolderIfExists(folderPathCoverPhoto);
 
     res.status(200).json(deletedExam);
 
-    // Emit event to all student's in school
+    // Emit event to all students in school
     if(deletedExam?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + deletedExam.schoolId, {action: 'examDeleted', data: deletedExam});
+      io.emit(
+        'examEvent-' + deletedExam.schoolId,
+        { action: 'examDeleted', data: deletedExam }
+      );
     }
+
   } catch (error) {
     console.error("Error deleting exam:", error);
     res.status(500).send("Internal Server Error");
