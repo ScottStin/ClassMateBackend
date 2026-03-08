@@ -50,14 +50,47 @@ router.post('/', async (req, res) => {
     res.status(201).json(createdHomework);
 
     // Emit event to all connected clients after homework is created
-    if(createdHomework.students) {
-      for(const student of createdHomework.students) {
-        const io = getIo();
-        io.emit('homeworkEvent-' + student.studentId, {action: 'homeworkCreated', data: createdHomework});
-      }
+    if(createdHomework.schoolId) {
+      const io = getIo();
+      io.emit('homeworkEvent-' + createdHomework.schoolId, {action: 'homeworkCreated', data: createdHomework});
     }
   } catch (error) {
     console.error("Error creating new homework:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/enrol-students/:id', async (req, res) => {
+  try {
+    const homework = await homeworkModel.findById(req.params.id);
+    
+    if (!homework) {
+      return res.status(404).json('Homework not found');
+    }
+
+    const studentIds = req.body.studentIds;
+
+    // Remove students not in req.body from homework.students
+    homework.students = homework.students.filter(
+      (id) => studentIds.some((student) => student._id === id)
+    );
+
+    // Add new students to homework.students
+    for(const studentId of studentIds) {
+      if (homework.students.includes(studentId)) {
+        continue
+      }
+      homework.students.push(studentId);
+    }
+    await homework.save();
+    res.json(homework);
+
+    if(homework?.schoolId) {
+      const io = getIo();
+      io.emit('homeworkEvent-' + homework.schoolId, {action: 'homeworkUpdated', data: homework});
+    }
+  } catch (error) {
+    console.error("Error enrolling students in homework:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -104,11 +137,61 @@ router.patch('/:id', async (req, res) => {
         await updatedHomework.save();
       }
 
+      // Emit event to all connected clients after homework is updated
+      if(updatedHomework.schoolId) {
+        const io = getIo();
+        io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkUpdated', data: updatedHomework});
+      }
     } else {
       res.status(404).json({ message: "Homework not found" });
     }
   } catch (error) {
     console.error("Error updating Homework:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.delete('/bulk-delete', async (req, res) => {
+  try {
+    const homeworkIds = req.body;
+
+    if (!Array.isArray(homeworkIds) || homeworkIds.length === 0) {
+      return res.status(400).json({ message: 'No homework ids provided' });
+    }
+
+    // Find homework first so we can return + emit them
+    const homeworkToDelete = await homeworkModel.find({ _id: { $in: homeworkIds } });
+
+    if (homeworkToDelete.length === 0) {
+      return res.status(404).json({ message: 'No homework found' });
+    }
+
+    // --- delete homework attachment:
+    for(const homework of homeworkToDelete) {
+      if(homework.attachment?.fileName) {
+        const { fileName } = homework.attachment;
+        await cloudinary.uploader.destroy(fileName, (err, result) => {
+          if (err) console.log('Error deleting homework attachment:', err);
+        });
+      }
+    }
+
+  // Now delete homework
+    await homeworkModel.deleteMany({ _id: { $in: homeworkIds } });
+    res.status(200).json(homeworkToDelete);
+
+    // Emit socket events
+    const io = getIo();
+    homeworkToDelete.forEach(homework => {
+      if(homework?.schoolId) {
+        io.emit(
+          'homeworkEvent-' + homework.schoolId,
+          { action: 'homeworkDeleted', data: homework}
+        );
+      }
+    });
+    } catch (error) {
+    console.error("Error deleting Homework exercises:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -137,6 +220,12 @@ router.delete('/remove-student', async (req, res) => {
     await homeworkItem.save();
 
     res.status(200).json(homeworkItem);
+
+    // Emit event to all connected clients after homework is updated
+    if(homeworkItem.schoolId) {
+        const io = getIo();
+        io.emit('homeworkEvent-' + homeworkItem.schoolId, {action: 'homeworkUpdated', data: homeworkItem});
+    }
   } catch (error) {
     console.error("Error removing student from Homework:", error);
     res.status(500).send("Internal Server Error");
@@ -149,7 +238,7 @@ router.delete('/:id', async (req, res) => {
     if (deletedHomework) {
 
       // --- delete homework attachment:
-      if(deletedHomework.attachment) {
+      if(deletedHomework.attachment?.fileName) {
         const { fileName } = deletedHomework.attachment;
         await cloudinary.uploader.destroy(fileName, (err, result) => {
           if (err) console.log('Error deleting homework attachment:', err);
@@ -157,6 +246,12 @@ router.delete('/:id', async (req, res) => {
       }
 
       res.status(200).json(deletedHomework);
+
+      // Emit socket events
+      if(deletedHomework?.schoolId) {
+        const io = getIo();
+        io.emit('homeworkEvent-' + deletedHomework.schoolId, {action: 'homeworkDeleted', data: deletedHomework});
+      }
     } else {
       res.status(404).json({ message: "Homework not found" });
     }
@@ -207,18 +302,10 @@ router.post('/new-comment', async (req, res) => {
 
     res.status(201).json(updatedHomework);
 
-    // Emit event to all connected clients after comment is created - emit notification of feedback to student
-    if(newComment.commentType === 'feedback' && newComment.studentId) {
+    if(updatedHomework.schoolId) {
       const io = getIo();
-      io.emit('homeworkEvent-' + newComment.studentId, {action: 'homeworkCommentCreated', data: updatedHomework});
+      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentCreated', data: updatedHomework});
     }
-
-    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
-    if(newComment.commentType === 'submission' && newComment.teacherId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + newComment.teacherId, {action: 'homeworkCommentCreated', data: updatedHomework});
-    }
-
   } catch (error) {
     console.error("Error adding comment to homework:", error);
     res.status(500).send("Internal Server Error");
@@ -275,15 +362,9 @@ router.post('/update-comment', async (req, res) => {
     res.status(201).json(updatedHomework);
 
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
-    if(newComment.commentType === 'feedback' && newComment.studentId) {
+    if(updatedHomework.schoolId) {
       const io = getIo();
-      io.emit('homeworkEvent-' + newComment.studentId, {action: 'homeworkCommentUpdated', data: updatedHomework});
-    }
-
-    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
-    if(newComment.commentType === 'submission' && newComment.teacherId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + newComment.teacherId, {action: 'homeworkCommentUpdated', data: updatedHomework});
+      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentUpdated', data: updatedHomework});
     }
     
   } catch (error) {
@@ -349,17 +430,10 @@ router.post('/delete-comment', async (req, res) => {
     res.status(201).json(updatedHomework);
 
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
-    if(commentToDelete.commentType === 'feedback' && commentToDelete.studentId) {
+    if(updatedHomework.schoolId) {
       const io = getIo();
-      io.emit('homeworkEvent-' + commentToDelete.studentId, {action: 'homeworkCommentDeleted', data: updatedHomework});
+      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentDeleted', data: updatedHomework});
     }
-
-    // Emit event to all connected clients after comment is created - emit notification of submission to teacher
-    if(commentToDelete.commentType === 'submission' && commentToDelete.teacherId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + commentToDelete.teacherId, {action: 'homeworkCommentDeleted', data: updatedHomework});
-    }
-
   } catch (error) {
     console.error("Error modifying comment on homework:", error);
     res.status(500).send("Internal Server Error");
