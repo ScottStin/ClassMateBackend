@@ -36,8 +36,21 @@ async function deleteCloudinaryFolderIfExists(folderPath) {
   }
 }
 
+/**
+ * Helper function to delete file
+ */
+async function deleteFile (fileName) {
+  if (fileName) {
+    cloudinary.uploader.destroy(fileName, (err, result) => {
+      if (err) console.log('Error deleting file:', err);
+    });
+  }
+};
+
+
 module.exports = {
   cloudinaryFolderHasResources,
   deleteCloudinaryFolder,
-  deleteCloudinaryFolderIfExists
+  deleteCloudinaryFolderIfExists,
+  deleteFile  
 };

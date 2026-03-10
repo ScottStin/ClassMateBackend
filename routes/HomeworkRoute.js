@@ -4,8 +4,20 @@ const multer = require('multer');
 const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 const { getIo } = require('../socket-io'); // Import the getIo function
+const { deleteFile } = require('../file-helper.js');
 
 const homeworkModel = require('../models/homework-model');
+
+/**
+ * Helper function to delete comment attachments from Cloudinary
+ */
+const deleteCommentAttachments = (comments) => {
+  comments.forEach(comment => {
+    if (comment.attachment?.fileName) {
+      deleteFile(comment.attachment.fileName);
+    }
+  });
+};
 
 /**
  * ==============================
@@ -70,17 +82,26 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     const studentIds = req.body.studentIds;
 
+    // Get current and new student IDs
+    const currentStudentIds = homework.students.map(s => s.studentId);
+    const newStudentIds = studentIds.map(s => s._id);
+    const removedStudentIds = currentStudentIds.filter(id => !newStudentIds.includes(id));
+
+    // Delete comments and attachments for removed students
+    if (removedStudentIds.length > 0) {
+      const commentsToDelete = homework.comments.filter(comment => removedStudentIds.includes(comment.studentId.toString()));
+      deleteCommentAttachments(commentsToDelete);
+      homework.comments = homework.comments.filter(comment => !removedStudentIds.includes(comment.studentId.toString()));
+    }
+
     // Remove students not in req.body from homework.students
-    homework.students = homework.students.filter(
-      (id) => studentIds.some((student) => student._id === id)
-    );
+    homework.students = homework.students.filter(s => newStudentIds.includes(s.studentId));
 
     // Add new students to homework.students
-    for(const studentId of studentIds) {
-      if (homework.students.includes(studentId)) {
-        continue
+    for(const s of studentIds) {
+      if (!homework.students.some(st => st.studentId === s._id)) {
+        homework.students.push({ studentId: s._id, completed: false });
       }
-      homework.students.push(studentId);
     }
     await homework.save();
     res.json(homework);
@@ -133,6 +154,8 @@ router.patch('/:id', async (req, res) => {
       const removedStudents = currentStudentList.filter(studentId => !newStudentList.includes(studentId));
       
       if (removedStudents.length > 0) {
+        const commentsToDelete = updatedHomework.comments.filter(comment => removedStudents.includes(comment.studentId.toString()));
+        deleteCommentAttachments(commentsToDelete);
         updatedHomework.comments = updatedHomework.comments.filter(comment => !removedStudents.includes(comment.studentId.toString()));
         await updatedHomework.save();
       }
@@ -166,8 +189,9 @@ router.delete('/bulk-delete', async (req, res) => {
       return res.status(404).json({ message: 'No homework found' });
     }
 
-    // --- delete homework attachment:
+    // --- delete comment and homework attachments:
     for(const homework of homeworkToDelete) {
+      deleteCommentAttachments(homework.comments);
       if(homework.attachment?.fileName) {
         const { fileName } = homework.attachment;
         await cloudinary.uploader.destroy(fileName, (err, result) => {
@@ -214,6 +238,10 @@ router.delete('/remove-student', async (req, res) => {
     // Remove the student from the homework item students list
     homeworkItem.students = homeworkItem.students.filter((student) => student.studentId !== studentId);
 
+    // Delete comments and attachments for the removed student
+    const commentsToDelete = homeworkItem.comments.filter((comment) => comment.studentId.toString() === studentId);
+    deleteCommentAttachments(commentsToDelete);
+
     // Correctly filter out comments by the student
     homeworkItem.comments = homeworkItem.comments.filter((comment) => comment.studentId.toString() !== studentId);
 
@@ -236,6 +264,9 @@ router.delete('/:id', async (req, res) => {
   try {
     const deletedHomework = await homeworkModel.findByIdAndDelete(req.params.id);
     if (deletedHomework) {
+
+      // --- delete comment attachments:
+      deleteCommentAttachments(deletedHomework.comments);
 
       // --- delete homework attachment:
       if(deletedHomework.attachment?.fileName) {
@@ -323,7 +354,7 @@ router.post('/update-comment', async (req, res) => {
       return res.status(404).json({ error: 'Homework not found' });
     }
   
-    // --- filter comments from homwework item to match the req.body.commenType
+    // --- filter comments from homework item to match the req.body.commentType
     comments = updatedHomework.comments
 
     filteredComments = comments.filter((comment)=>
@@ -384,7 +415,7 @@ router.post('/delete-comment', async (req, res) => {
       return res.status(404).json({ error: 'Homework not found' });
     }
   
-    // --- filter comments from homwework item to match the req.body.commenType
+    // --- filter comments from homework item to match the req.body.commentType
     comments = updatedHomework.comments
 
     filteredComments = comments.filter((comment)=>
