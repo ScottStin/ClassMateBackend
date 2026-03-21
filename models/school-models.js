@@ -52,6 +52,14 @@ const schoolSchema = mongoose.Schema({
     errorColor:{
         type: String,
     },
+    applyOrbAffect: {
+    type: Boolean,
+    default: true
+    },
+    sideMenuTransparent: {
+    type: String,
+    default: 'opaque'
+    },
     primaryButtonTextColor:{
         type: String,
     },
