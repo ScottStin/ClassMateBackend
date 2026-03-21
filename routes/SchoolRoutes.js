@@ -65,7 +65,7 @@ router.post('/', async (req, res) => {
     // Logo upload
     if (req.body.logoPrimary) {
       try {
-        const result = await cloudinary.uploader.upload(req.body.logoPrimary.url, { folder: 'Class E' });
+        const result = await cloudinary.uploader.upload(req.body.logoPrimary.url, { folder: `${req.params.id}/logos` });
         newSchool.logoPrimary = { url: result.url, filename: result.public_id };
         await newSchool.save();
       } catch (error) {
@@ -75,7 +75,7 @@ router.post('/', async (req, res) => {
 
     if (req.body.logoSecondary) {
       try {
-        const result = await cloudinary.uploader.upload(req.body.logoSecondary.url, { folder: 'Class E' });
+        const result = await cloudinary.uploader.upload(req.body.logoSecondary.url, { folder: `${req.params.id}/logos` });
         newSchool.logoSecondary = { url: result.url, filename: result.public_id };
         await newSchool.save();
       } catch (error) {
@@ -124,10 +124,75 @@ router.post('/', async (req, res) => {
 
 router.patch('/:id', async (req, res) => {
   try {
-    // Constructing an object with only the fields that need to be updated
+    const school = await schoolModel.findById(req.params.id);
+    if (!school) {
+      return res.status(404).send('School not found');
+    }
+
     const updateFields = {};
+
+    // =========================
+    // HASH PASSWORD (if provided)
+    // =========================
+    if (req.body.password) {
+      const hashedPassword = await bcrypt.hash(req.body.password, 12);
+      updateFields.hashedPassword = hashedPassword;
+    }
+
+    // =========================
+    // LOGO PRIMARY
+    // =========================
+    console.log(req.body.logoPrimary)
+    if (req.body.logoPrimary && req.body.logoPrimary.url !== school.logoPrimary?.url) {
+      try {
+        // Delete old image if exists
+        if (school.logoPrimary?.filename) {
+          await cloudinary.uploader.destroy(school.logoPrimary.filename);
+        }
+
+        // Upload new one
+        const result = await cloudinary.uploader.upload(req.body.logoPrimary.url, {
+          folder: `${req.params.id}/logos`
+        });
+
+        updateFields.logoPrimary = {
+          url: result.url,
+          filename: result.public_id
+        };
+      } catch (err) {
+        console.error('Error updating primary logo:', err);
+      }
+    }
+
+    // =========================
+    // LOGO SECONDARY
+    // =========================
+    if (req.body.logoSecondary && req.body.logoSecondary.url !== school.logoSecondary?.url) {
+      try {
+        if (school.logoSecondary?.filename) {
+          await cloudinary.uploader.destroy(school.logoSecondary.filename);
+        }
+
+        const result = await cloudinary.uploader.upload(req.body.logoSecondary.url, {
+          folder: `${req.params.id}/logos`
+        });
+
+        updateFields.logoSecondary = {
+          url: result.url,
+          filename: result.public_id
+        };
+      } catch (err) {
+        console.error('Error updating secondary logo:', err);
+      }
+    }
+
+    // =========================
+    // OTHER FIELDS
+    // =========================
     for (const key in req.body) {
-      if (req.body.hasOwnProperty(key)) {
+      if (
+        !['logoPrimary', 'logoSecondary', 'unhashedPassword', 'password'].includes(key)
+      ) {
         updateFields[key] = req.body[key];
       }
     }
@@ -138,31 +203,40 @@ router.patch('/:id', async (req, res) => {
       { new: true }
     );
 
-    if (updatedSchool) {
-      const schoolAdminUser = await userModel.findOne({ schoolId: req.params.id, userType: 'school' });
+    // =========================
+    // UPDATE SCHOOL ADMIN USER
+    // =========================
+    const schoolAdminUser = await userModel.findOne({
+      schoolId: req.params.id,
+      userType: 'school'
+    });
 
-      // Update user details
-      if (schoolAdminUser) {
-        const updatedUser = await userModel.findByIdAndUpdate(
-          schoolAdminUser._id,
-          {
-            $set: {
-              name: req.body.name,
-              email: req.body.email,
-              profilePicture: updatedSchool.logoPrimary ?? null
-            }
-          },
-          { new: true }
-        );
-
-        console.log(updatedUser);
-        res.status(201).json({school: updatedSchool, user: updatedUser});
-      } else {
-        res.status(404).send('School admin user not found');
-      }
-    } else {
-      res.status(404).send('School not found');
+    if (!schoolAdminUser) {
+      return res.status(404).send('School admin user not found');
     }
+
+    const userUpdateFields = {
+      name: updatedSchool.name,
+      email: updatedSchool.email,
+      profilePicture: updatedSchool.logoPrimary ?? null
+    };
+
+    // Update password in user too if changed
+    if (updateFields.hashedPassword) {
+      userUpdateFields.hashedPassword = updateFields.hashedPassword;
+    }
+
+    const updatedUser = await userModel.findByIdAndUpdate(
+      schoolAdminUser._id,
+      { $set: userUpdateFields },
+      { new: true }
+    );
+
+    res.status(200).json({
+      school: updatedSchool,
+      user: updatedUser
+    });
+
   } catch (error) {
     console.error('Error updating school:', error);
     res.status(500).send('Internal Server Error');
