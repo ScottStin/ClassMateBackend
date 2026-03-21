@@ -146,10 +146,11 @@ router.patch('/:id', async (req, res) => {
     res.status(201).json(updatedUser);
 
     // If user level is updated, notify user
-    if(updatedUser?.level.shortName !== nonUpdatedUser.level.shortName) {
-      const io = getIo();
-      io.emit('userEvent-' + updatedUser._id, {action: 'userLevelUpdated', data: updatedUser});
-    }
+    const io = getIo();
+    io.emit('userEvent-' + updatedUser._id, {action: 'userUpdated', data: updatedUser});
+    // if(updatedUser?.level.shortName !== nonUpdatedUser.level.shortName) {
+    //   io.emit('userEvent-' + updatedUser._id, {action: 'userLevelUpdated', data: updatedUser});
+    // }
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).send('Internal Server Error');
