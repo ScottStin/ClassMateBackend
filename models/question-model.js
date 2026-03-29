@@ -12,6 +12,7 @@ const questionSchema = mongoose.Schema({
     time: { type: Number, default: null },
     randomQuestionOrder: { type: Boolean, default: null },
     partialMarking: { type: Boolean, default: null },
+    caseSensitive: { type: Boolean, default: null },
     multipleChoiceQuestionList: [{
         text: { type: String, required: true },
         correct: { type: Boolean, required: true },

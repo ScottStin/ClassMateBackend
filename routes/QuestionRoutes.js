@@ -582,6 +582,75 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
   }
 });
 
+/**
+ * Manually edit score of question for user
+ */
+
+router.patch('/manually-edit-question-score/:id', async function (req, res) {
+  try {
+    const questionId = req.params.id;
+    const studentId = req.body.studentId;
+    const score = req.body.score;
+
+    if (!studentId) {
+      return res.status(400).json({ message: "studentId is required" });
+    }
+
+    if (score === undefined || score === null) {
+      return res.status(400).json({ message: "score is required" });
+    }
+
+    const foundQuestion = await questionModel.findById(questionId);
+
+    if (!foundQuestion) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    // if (!foundQuestion.studentsCompleted) {
+    //   foundQuestion.studentsCompleted = [];
+    // }
+    // if (!foundQuestion.studentResponse) {
+    //   foundQuestion.studentResponse = [];
+    // }
+
+    // find student response
+    let foundResponse = foundQuestion.studentResponse.find(
+      (response) => response.studentId === studentId
+    );
+
+    // // if student has no response yet, create it
+    // if (!foundResponse) {
+    //   foundResponse = {
+    //     studentId: studentId,
+    //     response: null,
+    //     mark: {},
+    //     feedback: { text: null, teacher: null },
+    //   };
+
+    //   foundQuestion.studentResponse.push(foundResponse);
+
+    //   // re-get reference after push
+    //   foundResponse = foundQuestion.studentResponse.find(
+    //     (x) => x.studentId === studentId
+    //   );
+    // }
+
+    // make sure mark exists
+    if (!foundResponse.mark) {
+      foundResponse.mark = {};
+    }
+
+    // update score (stored as string in schema)
+    foundResponse.mark.totalMark = score.toString();
+
+    await foundQuestion.save();
+
+    return res.json(foundQuestion);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
 
 /**
  * Save image/audio for exam question prompt to cloudinary
