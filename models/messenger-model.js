@@ -72,9 +72,13 @@ const messageSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
-    replies: {
-        type: [this], // Self-referencing array of messages (replies)
-        default: [],
+    replies: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "messageModel"
+    }],
+    parentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "messageModel"
     },
     adminMessage: {
         type: Boolean,

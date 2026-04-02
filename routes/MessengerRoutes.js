@@ -151,6 +151,18 @@ router.post('/new-message', async (req, res) => {
       }
     }
 
+    if(req.body.parentMessageId) {
+      const parentMessage = await messageModel.findById(req.body.parentMessageId);
+      if(parentMessage) {
+        parentMessage.replies = parentMessage.replies || [];
+        parentMessage.replies.push(newMessage._id);
+        await parentMessage.save();
+
+        newMessage.parentId = req.body.parentMessageId;
+        await newMessage.save();
+      }
+    }
+
   } catch (error) {
     console.error("Error creating new message:", error);
     res.status(500).send("Internal Server Error");
