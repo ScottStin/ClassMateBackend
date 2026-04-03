@@ -33,6 +33,10 @@ const conversationSchema = mongoose.Schema({
         url:String,
         fileName:String,
     },
+    hasSavedMessages: {
+        type: Boolean,
+        required: false,
+    }
 })
 
 module.exports = mongoose.model('conversationModel', conversationSchema);

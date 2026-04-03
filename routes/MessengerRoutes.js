@@ -139,6 +139,7 @@ router.post('/new-message', async (req, res) => {
       }
     }
 
+    // update convo details:
     const conversation = await conversationModel.findById(newMessage.conversationId)
     if (conversation) {
       conversation.mostRecentMessage = {
@@ -151,6 +152,7 @@ router.post('/new-message', async (req, res) => {
       }
     }
 
+    // update parent message if this is a reply:
     if(req.body.parentMessageId) {
       const parentMessage = await messageModel.findById(req.body.parentMessageId);
       if(parentMessage) {
@@ -160,6 +162,15 @@ router.post('/new-message', async (req, res) => {
 
         newMessage.parentId = req.body.parentMessageId;
         await newMessage.save();
+
+        // Emit event to all connected clients after parent message is updated
+        const io = getIo();
+        if(parentMessage.recipients) {
+          for(const recipient of parentMessage.recipients.map((recipient) => recipient.userId)) {
+            io.emit('messageEvent-' + recipient, {action: 'messageUpdated', data: parentMessage});
+          }
+        }
+        io.emit('messageEvent-' + parentMessage.senderId, {action: 'messageUpdated', data: parentMessage});
       }
     }
 
@@ -230,7 +241,41 @@ router.patch('/:id', async (req, res) => {
     }
     io.emit('messageEvent-' + updatedMessage.senderId, {action: 'messageUpdated', data: updatedMessage});
   } catch (error) {
-    console.error("Error updating new message:", error);
+    console.error("Error updating message:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.patch('/:id/save-to-favorites', async (req, res) => {
+  try {
+    
+    console.log('hit')
+    const message = await messageModel.findById(req.params.id);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    if (!message.savedByIds) {
+      message.savedByIds = [];
+    }
+
+    const userId = req.body.currentUserId;
+    console.log(req.body)
+
+    if (message.savedByIds.includes(userId)) {
+      // remove userId
+      message.savedByIds = message.savedByIds.filter(id => id !== userId);
+    } else {
+      // add userId
+      message.savedByIds.push(userId);
+    }
+
+    await message.save();
+    res.status(200).json(message);
+
+  } catch (error) {
+    console.error("Error toggling message favorites:", error);
     res.status(500).send("Internal Server Error");
   }
 });

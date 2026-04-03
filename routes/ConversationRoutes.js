@@ -29,9 +29,17 @@ router.get('/', async function (req, res) {
                     .sort({ createdAt: -1 }) // most recent first
                     .lean(); // improve performance if we only need plain JS object
 
+                // Check if at least one message is saved by this user
+                const hasSavedMessages = await messageModel.exists({
+                  conversationId: conversation._id,
+                  savedByIds: currentUserId
+                });
+                conversation = conversation.toObject();
+                conversation.hasSavedMessages = !!hasSavedMessages;
+
                 // Attach the most recent message to the conversation
                 if (recentMessage) {
-                    conversation = conversation.toObject(); // convert mongoose doc to plain object
+                    // conversation = conversation.toObject(); // convert mongoose doc to plain object
                     conversation.mostRecentMessage = {
                         senderId: recentMessage.senderId,
                         messageText: recentMessage.messageText,
