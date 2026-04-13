@@ -197,6 +197,7 @@ const aiExamQuestionFeedbackRouter = require('./routes/AiExamQuestionFeedbackRou
 const aiPromptGeneratorRoute = require('./routes/AiPromptRoutes');
 const billingRoute = require('./routes/BillingRoutes')
 const courseRoute = require('./routes/CourseworkRoutes')
+const packageRoute = require('./routes/PackageRoutes')
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -212,6 +213,7 @@ app.use('/ai-feedback', aiExamQuestionFeedbackRouter);
 app.use('/ai-prompt-generator', aiPromptGeneratorRoute);
 app.use('/billing', billingRoute);
 app.use('/courses', courseRoute);
+app.use('/packages', packageRoute);
 
 /**
  * ==============================
