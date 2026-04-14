@@ -17,7 +17,6 @@ const packageModel = require('../models/package-model');
 
 router.get('/', async (req, res) => {
   try {
-    console.log('hit!')
     // Extract the currentSchoolId from the query parameters
     const currentSchoolId = req.query.currentSchoolId;
 
@@ -29,8 +28,6 @@ router.get('/', async (req, res) => {
 
     // Find packages based on the filter
     const packages = await packageModel.find(filter);
-
-    console.log(packages);
 
     // Send the filtered packages as the response
     res.json(packages);
@@ -48,7 +45,6 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    console.log(req.body);
     const newPackage = await new packageModel(req.body);
     const createdPackage = await newPackage.save();
     
@@ -111,9 +107,6 @@ router.patch('/:id', async (req, res) => {
           try {
             const { fileName } = nonUpdatedPackage.packageCoverPhoto;
 
-            console.log('hit!');
-            console.log(fileName);
-
             await cloudinary.uploader.destroy(fileName, (err, result) => {
               if (err) console.log('Error deleting previous cover picture:', err);
             });
@@ -129,5 +122,37 @@ router.patch('/:id', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
+
+
+/**
+ * ==============================
+ *  Delete package:
+ * ==============================
+*/
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedPackage = await packageModel.findByIdAndDelete(
+      req.params.id,
+    );
+
+    if (!deletedPackage) {
+      return res.status(404).send('Package not found');
+    }
+    
+    // --- Remove profile picture:
+    if(deletedPackage.packageCoverPhoto?.url) {
+      const { fileName } = deletedPackage.packageCoverPhoto;
+      await cloudinary.uploader.destroy(fileName, (err, result) => {
+        if (err) console.log('Error deleting cover picture:', err);
+      });
+    }
+    res.status(201).json(deletedPackage);
+  } catch (error) {
+    console.error('Error deleting package:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 
 module.exports = router;
