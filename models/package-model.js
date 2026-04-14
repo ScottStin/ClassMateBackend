@@ -30,7 +30,7 @@ const packageSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   subscriptionFrequency: {
     type: String,
-    enum: ['weekly', 'monthly', 'yearly'],
+    enum: ['weekly', 'monthly', 'yearly', null],
     default: null
   },
   paymentLength: { type: Number, default: null },

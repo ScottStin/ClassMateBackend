@@ -70,8 +70,63 @@ router.post('/', async (req, res) => {
       res.status(500).send("Internal Server Error");
     }
   } catch (error) {
-    console.error("Error creating user:", error);
+    console.error("Error creating package:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+/**
+ * ==============================
+ *  Update package:
+ * ==============================
+*/
+
+router.patch('/:id', async (req, res) => {
+  try {
+    // Exclude the profile picture property from the update
+    const { packageCoverPhoto, ...updatedFields } = req.body;
+
+    
+    // get original package before updating:
+    const nonUpdatedPackage = await packageModel.findOne({ _id: req.params.id });
+
+    // Update package:
+    const updatedPackage = await packageModel.findByIdAndUpdate(
+      req.params.id,
+      { $set: updatedFields },
+      { new: true }
+    );
+
+    if (!updatedPackage) {
+      return res.status(404).send('Package not found');
+    }
+
+    // Update picture in cloud service:
+    if(packageCoverPhoto) {
+      const image = await cloudinary.uploader.upload(req.body.packageCoverPhoto.url, {folder: `${updatedPackage.schoolId}/package-cover-photos`}, async (err, result)=>{
+        if (err) return console.log(err);        
+        updatedPackage.packageCoverPhoto = {url:result.url, fileName:result.public_id};
+        await updatedPackage.save();
+        if (image && nonUpdatedPackage.packageCoverPhoto) {
+          try {
+            const { fileName } = nonUpdatedPackage.packageCoverPhoto;
+
+            console.log('hit!');
+            console.log(fileName);
+
+            await cloudinary.uploader.destroy(fileName, (err, result) => {
+              if (err) console.log('Error deleting previous cover picture:', err);
+            });
+          } catch (err) {
+            console.error('Error deleting cloudinary link:', err);
+          }
+      }
+      })
+    }
+    res.status(201).json(updatedPackage);
+  } catch (error) {
+    console.error('Error updating package:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
