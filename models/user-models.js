@@ -62,6 +62,10 @@ const userSchema = mongoose.Schema({
     schoolBilling: {
         type: schoolBillingSchema,
     },
+
+    bulkPaymentClassHours: {
+        type: Number,
+    },
 }, {
     timestamps: true
 })

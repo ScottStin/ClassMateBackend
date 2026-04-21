@@ -7,6 +7,8 @@ const { getIo } = require('../socket-io');
 
 const userModel = require('../models/user-models');
 const packageModel = require('../models/package-model');
+const { courseworkModel } = require('../models/coursework-model');
+const examModel = require('../models/exam-model');
 
 
 /**
@@ -77,7 +79,7 @@ router.post('/', async (req, res) => {
  * ==============================
 */
 
-router.patch('/:id', async (req, res) => {
+router.patch('update-package/:id', async (req, res) => {
   try {
     // Exclude the profile picture property from the update
     const { packageCoverPhoto, ...updatedFields } = req.body;
@@ -120,6 +122,94 @@ router.patch('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error updating package:', error);
     res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * ==============================
+ *  Enrol student in package:
+ * ==============================
+*/
+
+router.patch('/enrol-student/:id', async (req, res) => {
+  try {
+    const { studentId, pack } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({
+        message: 'studentId is required'
+      });
+    }
+
+    // --- add student to package:
+    const updatedPackage = await packageModel.findByIdAndUpdate(
+      req.params.id,
+      {
+        $push: {
+          studentsEnrolled: {
+            studentId,
+            startDate: new Date(),
+            endDate: null
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedPackage) {
+      return res.status(404).json({
+        message: 'Package not found'
+      });
+    }
+
+    // --- add student class hours
+    const student = await userModel.findOne({ _id: studentId });
+    const io = getIo();
+
+    if(pack.type === 'one-time-payment' && pack.classHours > 0) {
+      student.bulkPaymentClassHours = student.bulkPaymentClassHours + pack.classHours
+    } // todo - add subscription
+
+    // --- enrol student in courses:
+    if(pack.courseIds?.length > 0) {
+      for(const corseId of pack.courseIds) {
+        const course = await courseworkModel.findById(corseId);
+        if (course.studentsEnrolled.includes(studentId)) {
+          continue
+        }
+        course.studentsEnrolled.push(studentId);
+
+        await course.save();
+
+        if(course?.schoolId) {
+          io.emit('courseEvent-' + course.schoolId, {action: 'courseUpdated', data: course});
+        }
+      }
+    }
+
+    // --- enrol student in exams:
+    if(pack.examIds?.length > 0) {
+      for(const examId of pack.examIds) {
+        const exam = await examModel.findById(examId);
+        if (exam.studentsEnrolled.includes(studentId)) {
+          continue
+        }
+        exam.studentsEnrolled.push(studentId);
+
+        await exam.save();
+
+        if(exam?.schoolId) {
+          io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+        }
+      }
+    }
+
+    res.status(200).json(updatedPackage);
+  } catch (error) {
+    console.error('Error enrolling student in package:', error);
+    res.status(500).json({
+      message: 'Internal Server Error'
+    });
   }
 });
 
