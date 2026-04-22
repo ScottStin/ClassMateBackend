@@ -4,12 +4,16 @@ const multer = require('multer');
 const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 const { getIo } = require('../socket-io');
+const Stripe = require('stripe');
 
 const userModel = require('../models/user-models');
 const packageModel = require('../models/package-model');
 const { courseworkModel } = require('../models/coursework-model');
 const examModel = require('../models/exam-model');
 
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-08-16' // or latest version
+});
 
 /**
  * ==============================
@@ -47,26 +51,78 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const newPackage = await new packageModel(req.body);
-    const createdPackage = await newPackage.save();
-    
-    if (createdPackage) {
-      try {
-        // --- upload package photo to cloudinary (todo - replace with file service):
-        if(createdPackage.packageCoverPhoto?.url) {
-          await cloudinary.uploader.upload(createdPackage.packageCoverPhoto.url, {folder: `${createdPackage.schoolId}/package-cover-photos`}, async (err, result)=>{
-            if (err) return console.log(err);  
-            createdPackage.packageCoverPhoto = {url:result.url, fileName:result.public_id};
-            await createdPackage.save();
-          })
-        }
-      } catch (error) {
-        res.status(500).send("Internal Server Error");
+    const newPackage = new packageModel(req.body);
+    let createdPackage = await newPackage.save();
+
+    if (!createdPackage) {
+      return res.status(500).send("Internal Server Error");
+    }
+
+    // --- create stripe subscription ids if package.type === subscription:
+    if (createdPackage.type === "subscription") {
+      if (!createdPackage.subscriptionFrequency) {
+        await packageModel.findByIdAndDelete(createdPackage._id);
+        return res.status(400).json({
+          message: "subscriptionFrequency is required for subscription packages"
+        });
       }
-    res.status(201).json(createdPackage);
-    } else {
+
+      const intervalMap = {
+        weekly: "week",
+        monthly: "month",
+        yearly: "year"
+      };
+
+      const stripeInterval = intervalMap[createdPackage.subscriptionFrequency];
+
+      if (!stripeInterval) {
+        await packageModel.findByIdAndDelete(createdPackage._id);
+        return res.status(400).json({
+          message: "Invalid subscriptionFrequency"
+        });
+      }
+
+      const stripeProduct = await stripe.products.create({
+        name: createdPackage.name,
+        description: createdPackage.description,
+        metadata: {
+          packageId: createdPackage._id.toString(),
+          schoolId: createdPackage.schoolId
+        }
+      });
+
+      const stripePrice = await stripe.prices.create({
+        unit_amount: Math.round(createdPackage.price * 100),
+        currency: createdPackage.stripeCurrency || "usd",
+        recurring: {
+          interval: stripeInterval
+        },
+        product: stripeProduct.id,
+        metadata: {
+          packageId: createdPackage._id.toString(),
+          schoolId: createdPackage.schoolId
+        }
+      });
+
+      createdPackage.stripeProductId = stripeProduct.id;
+      createdPackage.stripePriceId = stripePrice.id;
+      createdPackage = await createdPackage.save();
+    }
+
+    // --- upload package photo to cloudinary (todo - replace with file service):
+    try {
+      if(createdPackage.packageCoverPhoto?.url) {
+        await cloudinary.uploader.upload(createdPackage.packageCoverPhoto.url, {folder: `${createdPackage.schoolId}/package-cover-photos`}, async (err, result)=>{
+          if (err) return console.log(err);  
+          createdPackage.packageCoverPhoto = {url:result.url, fileName:result.public_id};
+          await createdPackage.save();
+        })
+      }
+    } catch (error) {
       res.status(500).send("Internal Server Error");
     }
+  res.status(201).json(createdPackage);
+ 
   } catch (error) {
     console.error("Error creating package:", error);
     res.status(500).send("Internal Server Error");

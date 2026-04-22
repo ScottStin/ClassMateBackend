@@ -39,7 +39,11 @@ const packageSchema = new mongoose.Schema({
   classHours: { type: Number, required: true },
   rolloverUnusedClasses: { type: Boolean, required: true, default: false },
   packageCoverPhoto: { type: packageCoverPhotoSchema, default: null },
-  studentsEnrolled: { type: [studentsEnrolledSchema], default: [] }
+  studentsEnrolled: { type: [studentsEnrolledSchema], default: [] },
+
+  stripeProductId: { type: String, default: null },
+  stripePriceId: { type: String, default: null },
+  stripeCurrency: { type: String, default: "usd" },
 });
 
 module.exports = mongoose.model('packageModel', packageSchema);

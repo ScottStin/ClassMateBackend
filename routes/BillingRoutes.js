@@ -9,10 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 router.post("/setup-intent", async (req, res, next) => {
-  console.log('setup-intent HIT');
   try {
     const userId = req.body.userId;
-    console.log(userId);
     if (!userId) return res.status(400).json({ message: "Missing userId" });
 
     const user = await userModel.findById(userId);
@@ -25,21 +23,12 @@ router.post("/setup-intent", async (req, res, next) => {
       return res.status(403).json({ message: "Only students can add payment methods" });
     }
 
-    console.log(user.userType)
-
     const customerId = await getOrCreateStripeCustomer(user);
-
-    console.log('customerId HIT')
-    console.log(customerId)
 
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ["card"]
     });
-
-    console.log('setupIntent hit');
-    console.log(setupIntent);
-    console.log(setupIntent.client_secret);
 
     res.json({ clientSecret: setupIntent.client_secret });
   } catch (err) {
@@ -123,12 +112,9 @@ router.delete("/payment-method/:userId", async (req, res, next) => {
 
 router.get("/history/:userId", async (req, res, next) => {
   try {
-    console.log(req.params.userId)
     const history = await PaymentHistory
       .find({ userId: req.params.userId })
       .sort({ createdAt: -1 });
-
-    console.log(history);
 
     res.json(history);
   } catch (err) {
@@ -138,7 +124,6 @@ router.get("/history/:userId", async (req, res, next) => {
 
 router.post('/charge', async (req, res, next) => {
   try {
-    console.log('charge hit');
     const { userId, amount, currency = 'usd', description } = req.body;
 
     if (!userId || !amount) {
@@ -146,33 +131,23 @@ router.post('/charge', async (req, res, next) => {
     }
 
     const user = await userModel.findById(userId);
-
-    console.log('user');
-    console.log(user);
-
     if (!user?.studentBilling?.stripeCustomerId) {
       return res.status(400).json({ message: 'No payment method on file' });
     }
 
-    // 1️⃣ Get default payment method
+    // Get default payment method
     const customer = await stripe.customers.retrieve(
       user.studentBilling.stripeCustomerId
     );
 
-    console.log('customer');
-    console.log(customer);
-
     const paymentMethodId =
       customer.invoice_settings.default_payment_method;
-
-    console.log('paymentMethodId');
-    console.log(paymentMethodId);
 
     if (!paymentMethodId) {
       return res.status(400).json({ message: 'No default payment method' });
     }
 
-    // 2️⃣ Create PaymentIntent
+    // Create PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // cents
       currency,
@@ -187,7 +162,7 @@ router.post('/charge', async (req, res, next) => {
       },
     });
 
-    // 3️⃣ Save payment history
+    // Save payment history
     await PaymentHistory.create({
       userId: user._id,
       stripePaymentIntentId: paymentIntent.id,
@@ -202,6 +177,57 @@ router.post('/charge', async (req, res, next) => {
 
     res.json({ success: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
+    next(err);
+  }
+});
+
+/** ====================
+ * Start subscription:
+ * =====================
+ */
+
+router.post('/start-subscription-payment', async (req, res, next) => {
+  try {
+    const { userId, stripePriceId, metadata = {} } = req.body;
+
+    if (!userId || !stripePriceId) {
+      return res.status(400).json({ message: 'Missing userId or stripePriceId' });
+    }
+
+    const user = await userModel.findById(userId);
+    if (!user?.studentBilling?.stripeCustomerId) {
+      return res.status(400).json({ message: 'User does not have a Stripe Customer ID' });
+    }
+
+    // 3. Create the Subscription
+    // Note: Stripe will automatically attempt to charge the default payment method 
+    // on the customer object because we aren't passing a specific payment_method ID.
+    const subscription = await stripe.subscriptions.create({
+      customer: user.studentBilling.stripeCustomerId,
+      items: [{ price: stripePriceId }],
+      payment_behavior: 'default_incomplete', // Good for handling SCA/3D Secure
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'], // Expands info to check status immediately
+      metadata: {
+        userId: userId.toString(),
+        ...metadata
+      },
+    });
+
+    // 4. Update  local database 
+    // todo - add this. Also  want to store the subscriptionId and status on the user model
+    // user.studentBilling.subscriptionId = subscription.id;
+    // user.studentBilling.subscriptionStatus = subscription.status;
+    // await user.save();
+
+    res.json({
+      success: true,
+      subscriptionId: subscription.id,
+      clientSecret: subscription.latest_invoice.payment_intent?.client_secret,
+      status: subscription.status,
+    });
+  } catch (err) {
+    console.error('Subscription Error:', err);
     next(err);
   }
 });
