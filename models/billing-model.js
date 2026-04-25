@@ -5,6 +5,10 @@ const studentBillingSchema = new mongoose.Schema({
     type: String,
   },
 
+  subscriptionId: {
+    type: String,
+  },
+
   subscriptionStatus: {
     type: String,
     enum: ['active', 'trialing', 'past_due', 'canceled'],
@@ -13,6 +17,8 @@ const studentBillingSchema = new mongoose.Schema({
   currentPeriodEnd: {
     type: Number, // unix timestamp (Stripe standard)
   },
+
+  subscriptionPackageId: { type: String, default: null }
 }, { _id: false });
 
 const schoolBillingSchema = new mongoose.Schema({

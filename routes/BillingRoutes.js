@@ -8,6 +8,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-08-16' // or latest version
 });
 
+/**
+ * ===========================================
+ * Handling Payment Methods
+ * ===========================================
+ */
+
 router.post("/setup-intent", async (req, res, next) => {
   try {
     const userId = req.body.userId;
@@ -110,6 +116,12 @@ router.delete("/payment-method/:userId", async (req, res, next) => {
   }
 });
 
+/**
+ * ===========================================
+ * Payment History
+ * ===========================================
+ */
+
 router.get("/history/:userId", async (req, res, next) => {
   try {
     const history = await PaymentHistory
@@ -121,6 +133,12 @@ router.get("/history/:userId", async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * ===========================================
+ * Making Payments (single payments only)
+ * ===========================================
+ */
 
 router.post('/charge', async (req, res, next) => {
   try {
@@ -181,44 +199,63 @@ router.post('/charge', async (req, res, next) => {
   }
 });
 
-/** ====================
- * Start subscription:
- * =====================
+/**
+ * ===========================================
+ * Subscription Payments:
+ * ===========================================
  */
 
 router.post('/start-subscription-payment', async (req, res, next) => {
   try {
-    const { userId, stripePriceId, metadata = {} } = req.body;
-
-    if (!userId || !stripePriceId) {
-      return res.status(400).json({ message: 'Missing userId or stripePriceId' });
+     const { studentId, stripePriceId, packageId, description, metadata = {} } = req.body;
+    if (!studentId || !stripePriceId || !packageId) {
+      return res.status(400).json({ message: 'Missing studentId, packageId or stripePriceId' });
     }
 
-    const user = await userModel.findById(userId);
+    // --- get user:
+
+    const user = await userModel.findById(studentId);
     if (!user?.studentBilling?.stripeCustomerId) {
       return res.status(400).json({ message: 'User does not have a Stripe Customer ID' });
     }
 
-    // 3. Create the Subscription
-    // Note: Stripe will automatically attempt to charge the default payment method 
-    // on the customer object because we aren't passing a specific payment_method ID.
+    // --- Get payment method:
+
+    const customer = await stripe.customers.retrieve(
+      user.studentBilling.stripeCustomerId
+    );
+    const paymentMethodId = customer.invoice_settings.default_payment_method;
+    if (!paymentMethodId) {
+      return res.status(400).json({ message: 'No default payment method on file' });
+    }
+
+    // --- Create the Subscription
+
     const subscription = await stripe.subscriptions.create({
       customer: user.studentBilling.stripeCustomerId,
+      description: description || `Subscription for ${user.email}`,
       items: [{ price: stripePriceId }],
-      payment_behavior: 'default_incomplete', // Good for handling SCA/3D Secure
-      payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'], // Expands info to check status immediately
+      default_payment_method: paymentMethodId,
+
+      // This makes Stripe fail if it cannot charge immediately
+      payment_behavior: 'error_if_incomplete',
+
+      expand: ['latest_invoice.payment_intent'],
       metadata: {
-        userId: userId.toString(),
+        packageId: packageId,
+        userId: studentId.toString(),
         ...metadata
-      },
+      }
     });
 
-    // 4. Update  local database 
-    // todo - add this. Also  want to store the subscriptionId and status on the user model
-    // user.studentBilling.subscriptionId = subscription.id;
-    // user.studentBilling.subscriptionStatus = subscription.status;
-    // await user.save();
+    // --- update database:
+
+    user.studentBilling.subscriptionId = subscription.id;
+    user.studentBilling.subscriptionStatus = subscription.status;
+    user.studentBilling.subscriptionPackageId = packageId;
+    await user.save();
+
+    // --- return:
 
     res.json({
       success: true,
@@ -231,6 +268,54 @@ router.post('/start-subscription-payment', async (req, res, next) => {
     next(err);
   }
 });
+
+router.post('/cancel-subscription-payment', async (req, res, next) => {
+  try {
+    const { studentId, cancelAtPeriodEnd = false } = req.body;
+
+    const user = await userModel.findById(studentId);
+    const subscriptionId = user?.studentBilling?.subscriptionId;
+
+    if (!subscriptionId) {
+      return res.status(404).json({ message: 'No active subscription found for this user' });
+    }
+
+    let subscription;
+
+    if (cancelAtPeriodEnd) {
+      // 1. Cancel at end of billing cycle
+      // The user remains "active" until the end of the month
+      subscription = await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+    } else {
+      // 2. Cancel immediately
+      // This stops service and billing right now
+      subscription = await stripe.subscriptions.cancel(subscriptionId);
+    }
+
+    // Update your database status
+    user.studentBilling.subscriptionStatus = 'canceled'; // subscription.status; // will be 'active' (with cancel_at_period_end: true) or 'canceled'
+    await user.save();
+
+    res.json({
+      success: true,
+      message: cancelAtPeriodEnd 
+        ? 'Subscription will cancel at the end of the current period' 
+        : 'Subscription canceled immediately',
+      subscription,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * ===========================================
+ * Add new customer to stripe:
+ * ===========================================
+ */
+
 
 async function getOrCreateStripeCustomer(user) {
   if (user.studentBilling?.stripeCustomerId) {
