@@ -68,7 +68,25 @@ const schoolSchema = mongoose.Schema({
             name: String,
             shortName: String,
         }
-    ]
+    ],
+    stripe: {
+        stripeAccountId: {
+            type: String,
+            default: null
+        },
+        setupComplete: {
+            type: Boolean,
+            default: false
+        },
+        chargesEnabled: {
+            type: Boolean,
+            default: false
+        },
+        demoMode: {
+            type: Boolean,
+            default: false
+        }, // use demoMode if school doesn't have a stripe id but we still want to give functionality for testing purposes.
+    },
 }, {
     timestamps: true
 })

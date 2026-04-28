@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const userModel = require('../models/user-models');
+const schoolModel = require('../models/school-models');
 const Stripe = require('stripe');
 const { PaymentHistory } = require('../models/billing-model');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-08-16' // or latest version
+  apiVersion: '2023-08-16' // todo - update with latest version.
 });
 
 /**
@@ -219,6 +220,29 @@ router.post('/start-subscription-payment', async (req, res, next) => {
       return res.status(400).json({ message: 'User does not have a Stripe Customer ID' });
     }
 
+    // --- Ensure that user doesn't have existing subscription:
+
+    const subs = await stripe.subscriptions.list({
+      customer: user.studentBilling.stripeCustomerId,
+      status: "all",
+      limit: 99
+    });
+
+    const activeSub = subs.data.find((sub) => {
+      const isActive = sub.status === "active" || sub.status === "trialing";
+      const isCancelling = sub.cancel_at_period_end === true;
+      return isActive && !isCancelling;
+    });
+
+    if (activeSub) {
+      return res.status(400).json({
+        message: "User already has an active subscription. Cancel it before starting another.",
+        subscriptionId: activeSub.id,
+        status: activeSub.status,
+        currentPeriodEnd: activeSub.current_period_end
+      });
+    }
+
     // --- Get payment method:
 
     const customer = await stripe.customers.retrieve(
@@ -312,10 +336,96 @@ router.post('/cancel-subscription-payment', async (req, res, next) => {
 
 /**
  * ===========================================
- * Add new customer to stripe:
+ * Connect school's stripe account to CM stripe account:
  * ===========================================
  */
 
+router.post("/connect-stripe-account", async (req, res) => {
+  try {
+    const { schoolId, redirectRoute } = req.body;
+
+    // 1. Check database first
+    const school = await schoolModel.findById(schoolId);
+    let stripeAccountId = school?.stripe?.stripeAccountId;
+
+    // 2. ONLY call .create() if we don't have an ID yet
+    if (!stripeAccountId) {
+      console.log("No ID found. Creating NEW Stripe account...");
+      const newAccount = await stripe.accounts.create({
+        type: "express",
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      });
+
+      stripeAccountId = newAccount.id;
+
+      // FIX: Use dot notation for nested updates
+      await schoolModel.findByIdAndUpdate(schoolId, {
+        "stripe.stripeAccountId": stripeAccountId,
+        "stripe.setupComplete": newAccount.details_submitted
+      });
+    } else {
+      console.log("ID found. Reusing existing account:", stripeAccountId);
+    }
+
+    // 3. This part ALWAYS runs, using the ID from step 2
+    // Stripe is smart enough to know if this is a "New" or "Resume" session
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `http://${redirectRoute}?stripe-connect=fail`,
+      return_url: `http://${redirectRoute}?stripe-connect=success`,
+      type: "account_onboarding",
+    });
+
+    res.json({ url: accountLink.url });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get("/school-stripe-account-status/:schoolId", async (req, res) => {
+  console.log('test hit')
+  try {
+    const { schoolId } = req.params;
+    const school = await schoolModel.findById(schoolId);
+  
+    if (!school?.stripe.stripeAccountId) {
+      return res.json({ connected: false });
+    }
+
+    const stripeAccountId = school?.stripe?.stripeAccountId;
+
+    if (!stripeAccountId) {
+      return res.json({ connected: false });
+    }
+
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+
+    await schoolModel.findByIdAndUpdate(schoolId, {
+      "stripe.setupComplete": account.details_submitted,
+      "stripe.chargesEnabled": account.charges_enabled
+    });
+
+    res.json({
+      connected: true,
+      details_submitted: account.details_submitted,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      requirements: account.requirements,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ===========================================
+ * Add new customer to stripe:
+ * ===========================================
+ */
 
 async function getOrCreateStripeCustomer(user) {
   if (user.studentBilling?.stripeCustomerId) {
