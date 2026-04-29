@@ -423,6 +423,40 @@ router.get("/school-stripe-account-status/:schoolId", async (req, res) => {
 
 /**
  * ===========================================
+ * Get school's stripe account details:
+ * ===========================================
+ */
+
+router.get("/stripe-account-details-school/:schoolId", async (req, res) => {
+  try {
+    const { schoolId } = req.params;
+    const school = await schoolModel.findById(schoolId);
+
+    if (!school?.stripe?.stripeAccountId) {
+      return res.status(404).json({ error: "No Stripe account linked." });
+    }
+
+    // Pull LIVE data from Stripe
+    const account = await stripe.accounts.retrieve(school.stripe.stripeAccountId);
+
+    // Only send what the UI actually needs to show
+    res.json({
+      businessName: account.business_profile.name || "Not set",
+      email: account.email,
+      // Stripe lists banks in 'external_accounts'
+      bankName: account.external_accounts?.data[0]?.bank_name || "No bank linked",
+      last4: account.external_accounts?.data[0]?.last4 || "****",
+      payoutInterval: account.settings.payouts.schedule.interval, // 'manual', 'daily', etc.
+      currentlyDue: account.requirements.currently_due
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * ===========================================
  * Add new customer to stripe:
  * ===========================================
  */
