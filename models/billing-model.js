@@ -45,10 +45,14 @@ const paymentHistorySchema  = new mongoose.Schema(
       index: true,
     },
 
-    // 🔁 Optional: who received the payment (school, platform, etc.)
-    targetUserId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'userModel',
+    // // 🔁 Optional: who received the payment (school, platform, etc.)
+    // targetUserId: {
+    //   type: mongoose.Schema.Types.ObjectId,
+    //   ref: 'userModel',
+    // },
+
+    schoolId: {
+      type: String,
     },
 
     // Stripe references (source of truth)

@@ -135,6 +135,18 @@ router.get("/history/:userId", async (req, res, next) => {
   }
 });
 
+router.get("/history-school/:schoolId", async (req, res, next) => {
+  try {
+    const history = await PaymentHistory
+      .find({ schoolId: req.params.schoolId })
+      .sort({ createdAt: -1 });
+
+    res.json(history);
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * ===========================================
  * Making Payments (single payments only)
@@ -143,10 +155,18 @@ router.get("/history/:userId", async (req, res, next) => {
 
 router.post('/charge', async (req, res, next) => {
   try {
-    const { userId, amount, currency = 'usd', description } = req.body;
+    const { userId, amount, currency = 'usd', description, schoolId } = req.body;
 
-    if (!userId || !amount) {
-      return res.status(400).json({ message: 'Missing parameters' });
+
+    if (!userId || !amount || !schoolId) {
+      return res.status(400).json({ message: 'Missing parameters (userId, amount, or school account)' });
+    }
+
+    const school = await schoolModel.findById(schoolId);
+    let schoolStripeAccountId = school?.stripe?.stripeAccountId;
+
+    if(!schoolStripeAccountId) {
+      return res.status(400).json({ message: 'Missing stripe account data for school' });
     }
 
     const user = await userModel.findById(userId);
@@ -175,8 +195,12 @@ router.post('/charge', async (req, res, next) => {
       off_session: true,
       confirm: true,
       description,
+      transfer_data: {
+        destination: schoolStripeAccountId, // ensure the funds go to the correct school
+      },
       metadata: {
         userId: user._id.toString(),
+        schoolId: schoolId,
         paymentType: 'student_to_school',
       },
     });
@@ -184,6 +208,7 @@ router.post('/charge', async (req, res, next) => {
     // Save payment history
     await PaymentHistory.create({
       userId: user._id,
+      schoolId: schoolId,
       stripePaymentIntentId: paymentIntent.id,
       stripeCustomerId: user.studentBilling.stripeCustomerId,
       amount,
