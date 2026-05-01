@@ -121,6 +121,13 @@ router.post('/', async (req, res) => {
     } catch (error) {
       res.status(500).send("Internal Server Error");
     }
+
+    // --- emit socket event:
+    if (createdPackage) {
+      const io = getIo();
+      io.emit('packageEvent-' + createdPackage.schoolId, {action: 'packageCreated', data: createdPackage});
+    }
+    
   res.status(201).json(createdPackage);
  
   } catch (error) {
@@ -175,6 +182,12 @@ router.patch('update-package/:id', async (req, res) => {
       })
     }
     res.status(201).json(updatedPackage);
+
+    // --- emit socket event:
+    if (updatedPackage) {
+      const io = getIo();
+      io.emit('packageEvent-' + updatedPackage.schoolId, {action: 'packageUpdated', data: updatedPackage});
+    }
   } catch (error) {
     console.error('Error updating package:', error);
     res.status(500).send('Internal Server Error');
@@ -260,6 +273,12 @@ router.patch('/enrol-student/:id', async (req, res) => {
       }
     }
 
+    // --- emit socket event:
+    if (updatedPackage) {
+      const io = getIo();
+      io.emit('packageEvent-' + updatedPackage.schoolId, {action: 'packageUpdated', data: updatedPackage});
+    }
+
     res.status(200).json(updatedPackage);
   } catch (error) {
     console.error('Error enrolling student in package:', error);
@@ -292,6 +311,12 @@ router.delete('/:id', async (req, res) => {
       await cloudinary.uploader.destroy(fileName, (err, result) => {
         if (err) console.log('Error deleting cover picture:', err);
       });
+    }
+
+    // --- emit socket event:
+    if (deletedPackage) {
+      const io = getIo();
+      io.emit('packageEvent-' + deletedPackage.schoolId, {action: 'packageDeleted', data: deletedPackage});
     }
     res.status(201).json(deletedPackage);
   } catch (error) {

@@ -4,6 +4,7 @@ const userModel = require('../models/user-models');
 const schoolModel = require('../models/school-models');
 const Stripe = require('stripe');
 const { PaymentHistory } = require('../models/billing-model');
+const { getIo } = require('../socket-io');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-08-16' // todo - update with latest version.
@@ -206,7 +207,7 @@ router.post('/charge', async (req, res, next) => {
     });
 
     // Save payment history
-    await PaymentHistory.create({
+    const paymentHistory = await PaymentHistory.create({
       userId: user._id,
       schoolId: schoolId,
       stripePaymentIntentId: paymentIntent.id,
@@ -218,6 +219,12 @@ router.post('/charge', async (req, res, next) => {
       paymentType: 'student_to_school',
       stripeCreatedAt: paymentIntent.created,
     });
+
+    // --- emit socket event:
+    if (paymentHistory) {
+      const io = getIo();
+      io.emit('paymentEvent-' + schoolId, {action: 'paymentCreated', data: paymentHistory});
+    }
 
     res.json({ success: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
@@ -272,6 +279,12 @@ router.post('/charge', async (req, res, next) => {
       //   paymentType: 'school_to_student',
       //   stripeCreatedAt: new Date(),
       // });
+
+      // --- emit socket event:
+      if (payment) {
+        const io = getIo();
+        io.emit('paymentEvent-' + schoolId, {action: 'paymentHistoryUpdated', data: payment});
+      }
 
       res.json({
         success: true,
@@ -400,7 +413,7 @@ router.post('/start-subscription-payment', async (req, res, next) => {
     });
 
     // Save payment history
-    await PaymentHistory.create({
+    const paymentHistory = await PaymentHistory.create({
       userId: user._id,
       schoolId: schoolId,
       stripePaymentIntentId: paymentIntent.id,
@@ -412,6 +425,12 @@ router.post('/start-subscription-payment', async (req, res, next) => {
       paymentType: 'student_to_school',
       stripeCreatedAt: paymentIntent.created,
     });
+
+    // --- emit socket event:
+    if (paymentHistory) {
+      const io = getIo();
+      io.emit('paymentEvent-' + schoolId, {action: 'paymentCreated', data: paymentHistory});
+    }
 
     // --- return:
 
