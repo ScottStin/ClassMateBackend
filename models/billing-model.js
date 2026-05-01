@@ -90,7 +90,7 @@ const paymentHistorySchema  = new mongoose.Schema(
     // 🔄 Business meaning
     paymentType: {
       type: String,
-      enum: ['student_to_school', 'school_to_platform'],
+      enum: ['student_to_school', 'school_to_platform', 'school_to_student'],
       required: true,
     },
 
@@ -101,6 +101,11 @@ const paymentHistorySchema  = new mongoose.Schema(
     // Stripe timestamp (preferred over Mongo createdAt)
     stripeCreatedAt: {
       type: Number, // unix timestamp
+    },
+
+    refundReason: {
+      type: String,
+      default: null,
     },
   },
   {

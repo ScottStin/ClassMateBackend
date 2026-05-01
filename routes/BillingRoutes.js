@@ -225,6 +225,67 @@ router.post('/charge', async (req, res, next) => {
   }
 });
 
+  router.post("/refund-payment", async (req, res, next) => {
+    try {
+      // 1. ADD schoolId to your destructuring here
+      const { paymentHistoryId, reason, amount, recipient, schoolId } = req.body;
+
+      // 2. FIX: Use findOne with the correct field name
+      const payment = await PaymentHistory.findOne({ stripePaymentIntentId: paymentHistoryId });
+
+      if (!payment) {
+        return res.status(404).json({ message: "Payment record not found." });
+      }
+
+      if (payment.status === "refunded") {
+        return res.status(400).json({ message: "This payment has already been refunded." });
+      }
+
+      // 3. Execute the refund on Stripe
+      const refund = await stripe.refunds.create({
+        payment_intent: payment.stripePaymentIntentId,
+        amount: amount ? Math.round(amount * 100) : undefined,
+        reverse_transfer: true,
+        refund_application_fee: true,
+        metadata: {
+          reason: reason || "Admin initiated refund",
+          mongoPaymentId: payment._id.toString(),
+        },
+      });
+
+      // 4. Update the ORIGINAL record
+      payment.status = amount && amount < payment.amount ? "partially_refunded" : "refunded";
+      payment.refundReason = reason || "No reason provided";
+      payment.stripeRefundId = refund.id; 
+      await payment.save();
+
+      // 5. Create the REFUND history record
+      // const newHistoryRecord = await PaymentHistory.create({
+      //   userId: recipient._id,
+      //   schoolId: schoolId,
+      //   stripePaymentIntentId: payment.stripePaymentIntentId,
+      //   stripeCustomerId: recipient.studentBilling.stripeCustomerId,
+      //   amount: amount || payment.amount, // Record the amount being sent back
+      //   description: `Refund: ${reason}`,
+      //   currency: 'usd',
+      //   status: 'refunded',
+      //   paymentType: 'school_to_student',
+      //   stripeCreatedAt: new Date(),
+      // });
+
+      res.json({
+        success: true,
+        status: payment.status,
+        refundId: refund.id,
+        paymentHistory: payment
+      });
+
+    } catch (err) {
+      console.error("Stripe Refund Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 /**
  * ===========================================
  * Subscription Payments:
