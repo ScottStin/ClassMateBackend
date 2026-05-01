@@ -233,10 +233,22 @@ router.post('/charge', async (req, res, next) => {
 
 router.post('/start-subscription-payment', async (req, res, next) => {
   try {
-     const { studentId, stripePriceId, packageId, description, metadata = {} } = req.body;
-    if (!studentId || !stripePriceId || !packageId) {
-      return res.status(400).json({ message: 'Missing studentId, packageId or stripePriceId' });
-    }
+     const { 
+      studentId, 
+      stripePriceId, 
+      packageId,
+      price,
+      description, 
+      metadata = {},
+      schoolId,
+      } = req.body;
+
+      if (!studentId || !stripePriceId || !packageId) {
+        return res.status(400).json({ message: 'Missing required parameters.' });
+      }
+
+      const school = await schoolModel.findById(schoolId);
+      let schoolStripeAccountId = school?.stripe?.stripeAccountId;
 
     // --- get user:
 
@@ -285,14 +297,17 @@ router.post('/start-subscription-payment', async (req, res, next) => {
       description: description || `Subscription for ${user.email}`,
       items: [{ price: stripePriceId }],
       default_payment_method: paymentMethodId,
+      payment_behavior: 'error_if_incomplete', // This makes Stripe fail if it cannot charge immediately
 
-      // This makes Stripe fail if it cannot charge immediately
-      payment_behavior: 'error_if_incomplete',
-
+      transfer_data: {
+        destination: schoolStripeAccountId, // The school gets the payment
+      },
+      
       expand: ['latest_invoice.payment_intent'],
       metadata: {
         packageId: packageId,
         userId: studentId.toString(),
+        schoolId: schoolId,
         ...metadata
       }
     });
@@ -303,6 +318,39 @@ router.post('/start-subscription-payment', async (req, res, next) => {
     user.studentBilling.subscriptionStatus = subscription.status;
     user.studentBilling.subscriptionPackageId = packageId;
     await user.save();
+
+    // Create PaymentIntent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(price * 100),
+      currency: 'usd',
+      customer: user.studentBilling.stripeCustomerId,
+      payment_method: paymentMethodId,
+      off_session: true,
+      confirm: true,
+      description,
+      transfer_data: {
+        destination: schoolStripeAccountId, // ensure the funds go to the correct school
+      },
+      metadata: {
+        userId: user._id.toString(),
+        schoolId: schoolId,
+        paymentType: 'student_to_school',
+      },
+    });
+
+    // Save payment history
+    await PaymentHistory.create({
+      userId: user._id,
+      schoolId: schoolId,
+      stripePaymentIntentId: paymentIntent.id,
+      stripeCustomerId: user.studentBilling.stripeCustomerId,
+      amount: price,
+      description: description || `Subscription for ${user.email}`,
+      currency: 'usd',
+      status: 'paid',
+      paymentType: 'student_to_school',
+      stripeCreatedAt: paymentIntent.created,
+    });
 
     // --- return:
 
