@@ -196,6 +196,56 @@ router.patch('update-package/:id', async (req, res) => {
 
 /**
  * ==============================
+ *  Update subscription end date:
+ * ==============================
+*/
+
+router.patch('/update-sub-package-cancel-end-date/:id', async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    const packageId = req.params.id;
+
+    if (!studentId) {
+      return res.status(400).send('Missing studentId');
+    }
+
+    const updatedPackage = await packageModel.findOneAndUpdate(
+      { _id: packageId },
+      { 
+        // Use the filtered positional operator to update all matching elements
+        $set: { "studentsEnrolled.$[elem].endDate": new Date() } 
+      },
+      { 
+        // Define the filter for which elements in the array to update
+      arrayFilters: [{ 
+        "elem.studentId": studentId, 
+        "elem.endDate": null // Only update if the enrollment is currently "open"
+        }],
+        new: true 
+      }
+    );
+
+    if (!updatedPackage) {
+      return res.status(404).send('Package not found');
+    }
+
+    // --- emit socket event:
+    const io = getIo();
+    io.emit('packageEvent-' + updatedPackage.schoolId, {
+      action: 'packageUpdated', 
+      data: updatedPackage
+    });
+
+    res.json({ success: true, data: updatedPackage });
+
+  } catch (error) {
+    console.error('Error updating package:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+/**
+ * ==============================
  *  Enrol student in package:
  * ==============================
 */
