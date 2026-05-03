@@ -152,9 +152,10 @@ router.patch('/start-lesson/:id', async (req, res) => {
     const [datePart, timePart] = startTime.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hour, minute] = timePart.split(':').map(Number);
-    
+
     // Create a Date object using the local time components (this avoids timezone adjustments)
-    const start = new Date(year, month - 1, day, hour, minute);
+    // const start = new Date(year, month - 1, day, hour, minute);
+    const start = new Date(startTime);
     
     // Calculate not_before and expires_at
     const notBefore = new Date(start.getTime() - (5 * 60000)); // 5 min before lesson starts

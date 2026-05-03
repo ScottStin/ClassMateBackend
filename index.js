@@ -83,7 +83,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 
-// --- increase req.body size to allow for
+// --- increase req.body size to allow for larger payloads:
 app.use(bodyParser.json({ limit: '100mb' })); // JSON payload limit
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true })); // URL-encoded payload limit
 
@@ -198,6 +198,7 @@ const aiPromptGeneratorRoute = require('./routes/AiPromptRoutes');
 const billingRoute = require('./routes/BillingRoutes')
 const courseRoute = require('./routes/CourseworkRoutes')
 const packageRoute = require('./routes/PackageRoutes')
+const { router: studentStats } = require('./routes/StudentStatsRoutes')
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -214,6 +215,7 @@ app.use('/ai-prompt-generator', aiPromptGeneratorRoute);
 app.use('/billing', billingRoute);
 app.use('/courses', courseRoute);
 app.use('/packages', packageRoute);
+app.use('/student-stats', studentStats);
 
 /**
  * ==============================

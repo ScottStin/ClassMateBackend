@@ -5,6 +5,7 @@ const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 const { getIo } = require('../socket-io'); // Import the getIo function
 const { deleteFile } = require('../file-helper.js');
+const { createStudentStat } = require('./StudentStatsRoutes.js');
 
 const homeworkModel = require('../models/homework-model');
 
@@ -298,7 +299,6 @@ router.delete('/:id', async (req, res) => {
  * ==============================
  */
 
-
 router.post('/new-comment', async (req, res) => {
   try {
     const homeworkId = req.body.homeworkId;
@@ -333,6 +333,19 @@ router.post('/new-comment', async (req, res) => {
 
     res.status(201).json(updatedHomework);
 
+    // --- add student stats:
+    if(newComment.commentType === 'feedback' && newComment.duration > 0) {
+      await createStudentStat({
+        studentId: newComment.studentId, 
+        activityType: 'homework',
+        minutes: newComment.duration,
+        date: Date.now(),
+        comment: `homework item: ${updatedHomework.name}`,
+        referenceId: updatedHomework._id,
+      })
+    }
+
+    // --- socket io:
     if(updatedHomework.schoolId) {
       const io = getIo();
       io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentCreated', data: updatedHomework});
