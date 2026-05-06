@@ -27,10 +27,9 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    console.log('hit!!')
     // We simply call our internal logic function
     const savedEntry = await createStudentStat(req.body);
-    
+
     // Return the newly created document
     res.status(201).json(savedEntry);
   } catch (error) {
@@ -73,11 +72,20 @@ const createStudentStat = async (data) => {
   // upsert: true (create if doesn't exist)
   // new: true (return the updated document)
   // runValidators: true (ensure enum check still works)
-  return await StudentEntry.findOneAndUpdate(filter, update, {
+  const newEntry = await StudentEntry.findOneAndUpdate(filter, update, {
     upsert: true,
     new: true,
     runValidators: true
   });
+
+  
+  // --- emit socket event:
+  if (newEntry) {
+    const io = getIo();
+    io.emit('statsEvents-' + user.schoolId, {action: 'statsCreated', data: newEntry});
+  }
+
+  return newEntry
 };
 
 module.exports = {

@@ -17,7 +17,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 /**
  * ==============================
- *  Get all packages:
+ *  Get packages:
  * ==============================
 */
 
@@ -39,6 +39,27 @@ router.get('/', async (req, res) => {
     res.json(packages);
   } catch (error) {
     console.error("Error getting packages:", error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+router.get('/find-one', async (req, res) => {
+  try {
+    const { packageId } = req.query;
+
+    if (!packageId) {
+      return res.status(400).json({ error: 'packageId is required' });
+    }
+
+    const pkg = await packageModel.findById(packageId);
+    
+    if (!pkg) {
+      return res.status(404).json({ error: 'Package not found' });
+    }
+
+    res.json(pkg);
+  } catch (error) {
+    console.error("Error getting package:", error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
