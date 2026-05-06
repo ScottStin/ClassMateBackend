@@ -5,7 +5,9 @@ const { getIo } = require('../socket-io');
 
 const questionModel = require("../models/question-model");
 const examModel = require("../models/exam-model");
+const { courseworkModel } = require("../models/coursework-model.js");
 const userModel = require("../models/user-models");
+const { createStudentStat } = require('./StudentStatsRoutes.js');
 
 /**
  * Get all exam questions
@@ -163,12 +165,25 @@ router.patch('/submit-exam/:id', async function (req, res) {
         }
         if (exam.studentsCompleted.includes({studentId: studentId, mark: null})) {
             return res.status(400).json('User has already completed this exam');
-          }
-          exam.studentsCompleted.push({studentId: studentId, mark: null});
-          await exam.save();
+        }
+        exam.studentsCompleted.push({studentId: studentId, mark: null});
+        await exam.save();
+
         res.status(200).json('Responses submitted successfully');
 
-        // Emit event to all student's in school
+        // --- add student stats:
+        if(exam) {
+            await createStudentStat({
+                studentId: studentId, 
+                activityType: 'exam',
+                minutes: 60, // todo - this should be updated to reflect the exam time.
+                date: Date.now(),
+                comment: `exam: ${exam.name}`,
+                referenceId: exam._id,
+            })
+        }
+
+        // --- Emit event to all student's in school
         if(exam?.schoolId) {
             const io = getIo();
             io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
@@ -573,6 +588,24 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
       });
 
       await foundQuestion.save();
+    }
+
+    console.log(foundQuestion.examId)
+    const course = await courseworkModel.findById(foundQuestion.examId)
+    console.log('course');
+    console.log(course);
+
+    const minutes = course.estimatedMinutesToComplete / course.questions.length
+
+    if(foundQuestion) {
+        await createStudentStat({
+            studentId: studentId, 
+            activityType: 'coursework',
+            minutes: minutes ?? 10,
+            date: Date.now(),
+            comment: `course foundQuestion: ${foundQuestion.name}`,
+            referenceId: foundQuestion._id,
+        })
     }
 
     return res.json(foundQuestion);
