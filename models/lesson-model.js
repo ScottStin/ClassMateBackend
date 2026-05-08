@@ -1,5 +1,17 @@
 const mongoose = require('mongoose');
 
+const enrolmentSchema = new mongoose.Schema({
+    studentId: { 
+        type: String, 
+        required: true 
+    },
+    enrolmentMethod: {
+        type: String,
+        required: true,
+        enum: ['subscription-package', 'one-time-payment-package', 'combo', 'casual'],
+    }
+}, { _id: false });
+
 const lessonSchema = mongoose.Schema({
     id:{
         type: String,
@@ -17,8 +29,7 @@ const lessonSchema = mongoose.Schema({
         maxlength: 250,
     },
     level: {
-        type: Array,
-        // enum: ['A1 Beginner','A2 Lower-Intermediate','B1 Intermediate','B2 Upper-Intermediate','C1 Advanced','C2 Native']
+        type: Array, // enum: ['A1 Beginner','A2 Lower-Intermediate','B1 Intermediate','B2 Upper-Intermediate','C1 Advanced','C2 Native']
         // required: true,
     },
     type: {
@@ -37,19 +48,11 @@ const lessonSchema = mongoose.Schema({
         type: Number,
         required: true,
     },
-    startDate: {
-        type: String,
-    },
     startTime: {
         type: String,
         required:true,
     },
-    lessontimeZone: {
-        type: String,       
-    },
-    studentsEnrolledIds:[
-        { type: String }
-    ],
+    studentsEnrolled: [enrolmentSchema],
     lessonStudentsAttended: [
         {type: String,}
     ],
@@ -59,16 +62,11 @@ const lessonSchema = mongoose.Schema({
         max: 1000,
     },
     status:{
-        type:String // started, finished
+        type: String // started, finished
     },
-    restricted:{
-        type:Boolean
-    },
-    disableFirstLesson:{
-        type:Boolean
-    }
 }, {
     timestamps: true
 })
+
 
 module.exports = mongoose.model('lessonModel', lessonSchema);

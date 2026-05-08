@@ -4,6 +4,7 @@ const fetch = require('node-fetch');
 const { getIo } = require('../socket-io');
 
 const lessonModel = require('../models/lesson-model');
+const userModel = require('../models/user-models');
 
 router.get('/', async function (req, res) {
     try {
@@ -71,34 +72,100 @@ router.patch('/update/:id', async (req, res) => {
 
 router.patch('/register/:id', async (req, res) => {
   try {
+    const { userId, enrolmentMethod } = req.body;
     const lesson = await lessonModel.findById(req.params.id);
 
     if (!lesson) {
       return res.status(404).json('Lesson not found');
     }
 
-    const userId = req.body._id;
+    // --- Check if user is already in the studentsEnrolled array of objects
+    const isAlreadyEnrolled = lesson.studentsEnrolled.some(
+      (enrollment) => enrollment.studentId === userId
+    );
 
-    if (lesson.studentsEnrolledIds.includes(userId)) {
+    if (isAlreadyEnrolled) {
       return res.status(400).json('User has already registered for this lesson');
     }
 
-    if(lesson.studentsEnrolledIds.length >= lesson.maxStudents) {
+    // --- Check capacity
+    if (lesson.studentsEnrolled.length >= lesson.maxStudents) {
       return res.status(400).json('Max students in lesson already reached');
     }
 
-    lesson.studentsEnrolledIds.push(userId);
+    // --- Push the new object structure
+    lesson.studentsEnrolled.push({
+      studentId: userId,
+      enrolmentMethod: enrolmentMethod || 'casual'
+    });
+
     await lesson.save();
 
-    res.json(`Student added to: ${lesson}`);
-
-    // Emit event to all connected clients after lesson is updated
-    if(lesson.schoolId) {
-      const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+    // --- Emit event to all connected clients
+    const io = getIo();
+    if (lesson.schoolId) {
+      io.emit('lessonEvent-' + lesson.schoolId, { action: 'lessonUpdated', data: lesson });
     }
+
+    // --- Update class hours in user model:
+    if(enrolmentMethod === 'casual' || !enrolmentMethod) {
+      return res.json(lesson);
+    }
+
+    const student = await userModel.findById(userId);
+
+    if (!student) {
+      return res.status(404).send("Student not found");
+    }
+
+    const duration = Math.round(lesson.duration / 60) || 0;
+
+    if (enrolmentMethod === 'subscription-package') {
+      student.subscriptionClassHours = Math.max(0, (student.subscriptionClassHours || 0) - duration);
+    } 
+
+    else if (enrolmentMethod === 'one-time-payment-package') {
+      if(duration >= student.bulkPaymentClassHours) {
+        student.bulkPaymentClassHours = 0
+      } else {
+        student.bulkPaymentClassHours = Math.max(0, (student.bulkPaymentClassHours || 0) - duration);
+      }
+      
+    } 
+
+    else if (enrolmentMethod === 'combo') {
+      let remainingDuration = duration;
+
+      // Subtract from subscription first
+      const subHours = student.subscriptionClassHours || 0;
+      const subToSubtract = Math.min(subHours, remainingDuration);
+      
+      student.subscriptionClassHours = subHours - subToSubtract;
+      remainingDuration -= subToSubtract;
+
+      // Subtract remaining from bulk payments
+      if (remainingDuration > 0) {
+        const bulkHours = student.bulkPaymentClassHours || 0;
+        const bulkToSubtract = Math.min(bulkHours, remainingDuration);
+        
+        student.bulkPaymentClassHours = bulkHours - bulkToSubtract;
+        remainingDuration -= bulkToSubtract;
+      }
+      
+      // Note: remainingDuration > 0 at this point means the student 
+      // actually didn't have enough total hours for the lesson.
+    }
+
+    await student.save();
+
+    if (student) {
+      io.emit('authStoreEvent-' + student._id, { action: 'currentUserUpdated', data: student });
+    }
+
+    res.json(lesson);
+
   } catch (error) {
-    console.error("Error join lessons:", error);
+    console.error("Error joining lesson:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -111,30 +178,45 @@ router.patch('/register-multi/:id', async (req, res) => {
       return res.status(404).json('Lesson not found');
     }
 
-    // Remove students not in req.body from lesson.studentsEnrolledIds
-    lesson.studentsEnrolledIds = lesson.studentsEnrolledIds.filter(
-      (id) => req.body.some((student) => student._id === id)
+    // Remove students from the lesson who are not in the incoming request body
+    lesson.studentsEnrolled = lesson.studentsEnrolled.filter((enrolment) =>
+      req.body.some((student) => student._id === enrolment.studentId)
     );
 
-    // Add new students to lesson.studentsEnrolledIds
+    //  Add: Iterate through the request body to add new students
     for (const student of req.body) {
-      userId = student._id
-      if (!lesson.studentsEnrolledIds.includes(userId) && lesson.studentsEnrolledIds.length < lesson.maxStudents) {
-        lesson.studentsEnrolledIds.push(userId);
+      const userId = student._id;
+      const method = student.enrolmentMethod || 'casual';
+
+      // Check if they are already in the array
+      const isAlreadyEnrolled = lesson.studentsEnrolled.some(
+        (e) => e.studentId === userId
+      );
+
+      // Add if not present and capacity allows
+      if (!isAlreadyEnrolled && lesson.studentsEnrolled.length < lesson.maxStudents) {
+        lesson.studentsEnrolled.push({
+          studentId: userId,
+          enrolmentMethod: method
+        });
       }
     }
 
     await lesson.save();
 
-    res.json(`Students added to: ${lesson}`);
-
-    // Emit event to all connected clients after lesson is updated
-    if(lesson.schoolId) {
-      const io2 = getIo(); // Safely get the initialized Socket.IO instance
-      io2.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+    // Emit event
+    if (lesson.schoolId) {
+      const io = getIo();
+      io.emit('lessonEvent-' + lesson.schoolId, { 
+        action: 'lessonUpdated', 
+        data: lesson 
+      });
     }
+
+    res.json(`Students updated for lesson: ${lesson.name}`);
+
   } catch (error) {
-    console.error("Error join lessons:", error);
+    console.error("Error in multi-registration:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -220,25 +302,54 @@ router.patch('/cancel/:id', async (req, res) => {
 
     const userId = req.body._id;
 
-    if (!lesson.studentsEnrolledIds.includes(userId)) {
+    // Check if the user is actually in the enrolled array
+    const enrollment = lesson.studentsEnrolled.find((student) => student.studentId === userId);
+    if (!enrollment) {
       return res.status(400).json('User is not currently enrolled in this lesson');
     }
-    index = lesson.studentsEnrolledIds.indexOf(userId);
-    if (index > -1) {
-      lesson.studentsEnrolledIds.splice(index, 1);
-    }
+  
+    // Remove the student by filtering out their ID // This creates a new array excluding the matching studentId
+    lesson.studentsEnrolled = lesson.studentsEnrolled.filter(
+      (enrolment) => enrolment.studentId !== userId
+    );
+
     await lesson.save();
 
-    res.json(`Student removed from: ${lesson}`);
-
-    // Emit event to all connected clients after lesson is updated
-    if(lesson.schoolId) {
-      const io = getIo(); // Safely get the initialized Socket.IO instance
-      io.emit('lessonEvent-' +  lesson.schoolId, {action: 'lessonUpdated', data: lesson});
+    // Emit event to all connected clients
+    const io = getIo();
+    if (lesson.schoolId) {
+      io.emit('lessonEvent-' + lesson.schoolId, {
+        action: 'lessonUpdated', 
+        data: lesson
+      });
     }
 
+    // Refund the students time if needed:
+    const enrolmentMethod = enrollment.enrolmentMethod;
+    if(enrolmentMethod === 'casual' || !enrolmentMethod || lesson.duration === 0 || !lesson.duration) {
+      return res.json(lesson);
+    }
+
+    const student = await userModel.findById(userId);
+
+    if (enrolmentMethod === 'subscription-package') {
+      student.subscriptionClassHours = (student.subscriptionClassHours + (lesson.duration / 60));
+    }
+
+    if (enrolmentMethod === 'one-time-payment-package' || enrolmentMethod === 'combo') {
+      student.bulkPaymentClassHours = (student.bulkPaymentClassHours + (lesson.duration / 60));
+    }
+
+    await student.save();
+
+    if (student) {
+      io.emit('authStoreEvent-' + student._id, { action: 'currentUserUpdated', data: student });
+    }
+
+    res.json(`Student removed from: ${lesson.name}`);
+
   } catch (error) {
-    console.error("Error leaving lessons:", error);
+    console.error("Error leaving lesson:", error);
     res.status(500).send("Internal Server Error");
   }
 });

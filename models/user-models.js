@@ -65,6 +65,16 @@ const userSchema = mongoose.Schema({
 
     bulkPaymentClassHours: {
         type: Number,
+        default: 0,
+        min: 0,
+        max: 9999,
+    },
+
+    subscriptionClassHours: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 9999,
     },
 }, {
     timestamps: true

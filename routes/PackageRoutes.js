@@ -274,6 +274,7 @@ router.patch('/update-sub-package-cancel-end-date/:id', async (req, res) => {
 router.patch('/enrol-student/:id', async (req, res) => {
   try {
     const { studentId, pack } = req.body;
+    const io = getIo();
 
     if (!studentId) {
       return res.status(400).json({
@@ -303,12 +304,12 @@ router.patch('/enrol-student/:id', async (req, res) => {
     }
 
     // --- add student class hours
-    const student = await userModel.findOne({ _id: studentId });
-    const io = getIo();
-
-    if(pack.type === 'one-time-payment' && pack.classHours > 0) {
-      student.bulkPaymentClassHours = student.bulkPaymentClassHours + pack.classHours
+    if(pack.type === 'one-time-payment' && Number(pack.classHours) > 0) {
+      const student = await userModel.findOne({ _id: studentId });
+      student.bulkPaymentClassHours = (Number(student.bulkPaymentClassHours) ?? 0) + Number(pack.classHours)
+      await student.save();
     } // todo - add subscription
+
 
     // --- enrol student in courses:
     if(pack.courseIds?.length > 0) {
@@ -346,7 +347,7 @@ router.patch('/enrol-student/:id', async (req, res) => {
 
     // --- emit socket event:
     if (updatedPackage) {
-      const io = getIo();
+      // const io = getIo();
       io.emit('packageEvent-' + updatedPackage.schoolId, {action: 'packageUpdated', data: updatedPackage});
     }
 
