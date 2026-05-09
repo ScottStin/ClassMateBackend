@@ -54,7 +54,11 @@ const userSchema = mongoose.Schema({
         type: String,
         maxlength: 250,
     },
-
+    status: {
+        type: String,
+        enum: ['online', 'offline', 'away', 'in-class'],
+        default: 'offline'
+    },
     studentBilling: {
         type: studentBillingSchema,
     },

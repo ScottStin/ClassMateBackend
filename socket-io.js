@@ -1,28 +1,14 @@
-// /**
-//  * ==============================
-//  *  SOCKET CONNECTION (used for live data updated)
-//  * ==============================
-// */
-
-// const socketIo = require('socket.io');
-// const http = require('http');
-// const server = http.createServer(app);
-// const io = socketIo(server); // Used for live data updates
-
-// // Socket connection
-// io.on('connection', (socket) => {
-//   console.log('A user connected');
-
-//   socket.on('disconnect', () => {
-//     console.log('User disconnected');
-//   });
-// });
-
-// module.exports = {io};
+/**
+ * ==============================
+ *  SOCKET CONNECTION (used for live data updated)
+ * ==============================
+*/
 
 const socketIo = require('socket.io');
-
-let io; // Declare a variable for Socket.IO
+let io;
+const userSocketCount = new Map(); // track connection counts in case one user is logged on with multiple devices
+const offlineTimers = new Map();
+const userModel = require('./models/user-models');
 
 // Initialize and export io with the server
 const initSocketIo = (server) => {
@@ -35,13 +21,61 @@ const initSocketIo = (server) => {
     });
 
     io.on('connection', (socket) => {
-        console.log('A user connected');
+        const userId = socket.handshake.query.userId;
+        if (!userId) return;
+
+        // 1. RECONNECTION CHECK: If there was a timer to mark them offline, kill it
+        if (offlineTimers.has(userId)) {
+            clearTimeout(offlineTimers.get(userId));
+            offlineTimers.delete(userId);
+            console.log(`User ${userId} reconnected before timeout. Stayed Online.`);
+        }
+
+        // 2. Increment count
+        const currentCount = userSocketCount.get(userId) || 0;
+        userSocketCount.set(userId, currentCount + 1);
+
+        // If truly first connection (not a refresh), mark online
+        if (currentCount === 0) {
+            updateUserStatus(userId, 'online');
+        }
 
         socket.on('disconnect', () => {
-            console.log('User disconnected');
+            const remainingCount = userSocketCount.get(userId) - 1;
+            
+            if (remainingCount <= 0) {
+                userSocketCount.delete(userId);
+                
+                // 3. DEBOUNCE DISCONNECT: Wait 5 seconds before marking offline
+                const timer = setTimeout(() => {
+                    updateUserStatus(userId, 'offline');
+                    offlineTimers.delete(userId);
+                }, 5000); // 5000ms = 5 seconds
+
+                offlineTimers.set(userId, timer);
+            } else {
+                userSocketCount.set(userId, remainingCount);
+            }
         });
     });
 };
+
+async function updateUserStatus(userId, status) {
+    try {
+        // Update DB
+        const user = await userModel.findByIdAndUpdate(userId, { status }, { new: true });
+
+        // Tell all other clients the status changed
+        io.emit(`statusChanged-${userId}`, { userId, status }); // this one is to update the current logged in user
+        console.log(`User ${userId} is now ${status}`);
+        
+        if(user?.schoolId) {
+            io.emit(`userEvent-${user.schoolId}`, { data: user, action: 'usersUpdated' }); // this one is to update the array of all users
+        }
+    } catch (err) {
+        console.error('Error updating status:', err);
+    }
+}
 
 // Function to return the initialized io instance
 const getIo = () => {

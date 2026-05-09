@@ -308,6 +308,10 @@ router.patch('/enrol-student/:id', async (req, res) => {
       const student = await userModel.findOne({ _id: studentId });
       student.bulkPaymentClassHours = (Number(student.bulkPaymentClassHours) ?? 0) + Number(pack.classHours)
       await student.save();
+
+    if (student) {
+      io.emit('authStoreEvent-' + studentId, { action: 'currentUserUpdated', data: student });
+    }
     } // todo - add subscription
 
 
