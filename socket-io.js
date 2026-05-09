@@ -67,15 +67,29 @@ const initSocketIo = (server) => {
 
 async function updateUserStatus(userId, status) {
     try {
-        // Update DB
-        const user = await userModel.findByIdAndUpdate(userId, { status }, { new: true });
+        // Update both status and the lastOnline timestamp
+        const user = await userModel.findByIdAndUpdate(
+            userId, 
+            { 
+                status, 
+                lastOnline: new Date() // Sets current UTC time
+            }, 
+            { new: true }
+        ).lean();
 
-        // Tell all other clients the status changed
-        io.emit(`statusChanged-${userId}`, { userId, status }); // this one is to update the current logged in user
-        console.log(`User ${userId} is now ${status}`);
+        if (!user) return;
+
+        // Emit to the specific user's listeners
+        io.emit(`statusChanged-${userId}`, { userId, status, lastOnline: user.lastOnline });
         
-        if(user?.schoolId) {
-            io.emit(`userEvent-${user.schoolId}`, { data: user, action: 'usersUpdated' }); // this one is to update the array of all users
+        console.log(`User ${userId} is now ${status} (Last Online: ${user.lastOnline})`);
+        
+        if (user.schoolId) {
+            // Update the global list for teachers/admins
+            io.emit(`userEvent-${user.schoolId}`, { 
+                data: user, 
+                action: 'usersUpdated' 
+            });
         }
     } catch (err) {
         console.error('Error updating status:', err);

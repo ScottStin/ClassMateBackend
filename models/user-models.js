@@ -59,6 +59,9 @@ const userSchema = mongoose.Schema({
         enum: ['online', 'offline', 'away', 'in-class'],
         default: 'offline'
     },
+    lastOnline: {
+        type: Date,
+    },
     studentBilling: {
         type: studentBillingSchema,
     },
