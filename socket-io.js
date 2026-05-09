@@ -57,6 +57,11 @@ const initSocketIo = (server) => {
                 userSocketCount.set(userId, remainingCount);
             }
         });
+
+        socket.on('setStatus', (newStatus) => {
+            console.log(`Manual status change for ${userId}: ${newStatus}`);
+            updateUserStatus(userId, newStatus);
+        });
     });
 };
 
