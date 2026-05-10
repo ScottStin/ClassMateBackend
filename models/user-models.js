@@ -39,16 +39,12 @@ const userSchema = mongoose.Schema({
         type: String,
     },
     level:{
-        longName: String,
+        longName: String, // todo - update with enum: ["A1 Beginner","A2 Lower-Intermediate","B1 Intermediate","B2 Upper-Intermediate","C1 Advanced","C2 Native"]
         shortName: String
     },
-    // level:{
-    //     type: String,        
-    //     enum: ["A1 Beginner","A2 Lower-Intermediate","B1 Intermediate","B2 Upper-Intermediate","C1 Advanced","C2 Native"]
-    // },
     eltComplete:{
         type: Boolean,
-        // default:false
+        default:false
     },
     statement:{
         type: String,

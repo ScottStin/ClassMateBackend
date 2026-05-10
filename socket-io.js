@@ -9,6 +9,7 @@ let io;
 const userSocketCount = new Map(); // track connection counts in case one user is logged on with multiple devices
 const offlineTimers = new Map();
 const userModel = require('./models/user-models');
+const { trackStudentActivity } = require('./routes/StudentActivityRoute');
 
 // Initialize and export io with the server
 const initSocketIo = (server) => {
@@ -67,7 +68,7 @@ const initSocketIo = (server) => {
 
 async function updateUserStatus(userId, status) {
     try {
-        // Update both status and the lastOnline timestamp
+        // --- Update both status and the lastOnline timestamp
         const user = await userModel.findByIdAndUpdate(
             userId, 
             { 
@@ -79,13 +80,29 @@ async function updateUserStatus(userId, status) {
 
         if (!user) return;
 
-        // Emit to the specific user's listeners
+        // --- update student tracking (if online for more that 10 seconds):
+        if (status === 'online' && user.userType === 'student' && user.schoolId) {
+            const userId = user._id.toString();
+            
+            setTimeout(async () => {
+                // 1. Check if the user still has an active socket connection
+                const isStillConnected = userSocketCount.has(userId);
+
+                if (isStillConnected) {
+                    console.log(`User ${userId} confirmed active after 60s. Tracking...`);
+                    await trackStudentActivity(user.schoolId, userId);
+                } else {
+                    console.log(`User ${userId} disconnected before 60s. Activity not tracked.`);
+                }
+            }, 10000);
+        }
+
+        // --- Emit to the specific user's listeners
         io.emit(`statusChanged-${userId}`, { userId, status, lastOnline: user.lastOnline });
-        
         console.log(`User ${userId} is now ${status} (Last Online: ${user.lastOnline})`);
         
+        // --- Update the global list for teachers/admins
         if (user.schoolId) {
-            // Update the global list for teachers/admins
             io.emit(`userEvent-${user.schoolId}`, { 
                 data: user, 
                 action: 'usersUpdated' 

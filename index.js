@@ -20,6 +20,14 @@
 
 /**
  * ==============================
+ *  Common trouble shooting issues
+ * ==============================
+*/
+
+// somtimes the backend might hang. In this case, run: taskkill /F /IM node.exe (do this from an adin console)
+
+/**
+ * ==============================
  *  DEVELOPMENT or PRODUCTION MODE
  * ==============================
 */
@@ -82,6 +90,14 @@ const connectDB = async () => {
 const express = require('express');
 const app = express();
 const cors = require('cors');
+
+// --- Stripe webhook setup (for subscription payment detection)
+// const billingWebhookRoute = require('./routes/BillingWebhookRoutes');
+// app.use(
+//   "/billing/stripe-webhook",
+//   express.raw({ type: "application/json" }), // Stripe requires raw body for webhook verification
+//   billingWebhookRoute
+// );
 
 // --- increase req.body size to allow for larger payloads:
 app.use(bodyParser.json({ limit: '100mb' })); // JSON payload limit
@@ -199,6 +215,7 @@ const billingRoute = require('./routes/BillingRoutes')
 const courseRoute = require('./routes/CourseworkRoutes')
 const packageRoute = require('./routes/PackageRoutes')
 const { router: studentStats } = require('./routes/StudentStatsRoutes')
+const { router: studentActivityRoute } = require('./routes/StudentActivityRoute')
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);
@@ -216,6 +233,7 @@ app.use('/billing', billingRoute);
 app.use('/courses', courseRoute);
 app.use('/packages', packageRoute);
 app.use('/student-stats', studentStats);
+app.use('/student-activity', studentActivityRoute);
 
 /**
  * ==============================
