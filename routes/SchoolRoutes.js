@@ -105,7 +105,6 @@ router.post('/', async (req, res) => {
           return res.status(500).send("Internal Server Error");
         }
   
-        console.log(newUser);  
         res.status(201).json(createdUser);
     } else {
       res.status(500).send("Internal Server Error");
@@ -142,7 +141,6 @@ router.patch('/:id', async (req, res) => {
     // =========================
     // LOGO PRIMARY
     // =========================
-    console.log(req.body.logoPrimary)
     if (req.body.logoPrimary && req.body.logoPrimary.url !== school.logoPrimary?.url) {
       try {
         // Delete old image if exists
@@ -251,11 +249,9 @@ router.patch('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    console.log(req);
     const deleteSchool = await schoolModel.findByIdAndDelete(
       req.params.id,
     );
-    console.log(deleteSchool);
 
     if (!deleteSchool) {
       return res.status(404).send('School not found');

@@ -81,8 +81,6 @@ router.post('/written', async (req, res) => {
       return res.status(400).json({ error: 'Missing data' });
     }
 
-    console.log(prompt);
-
   try {
       const completion = await openai.chat.completions.create({
           model: 'gpt-3.5-turbo',

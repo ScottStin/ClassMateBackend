@@ -503,7 +503,7 @@ router.post("/connect-stripe-account", async (req, res) => {
 
     // 2. ONLY call .create() if we don't have an ID yet
     if (!stripeAccountId) {
-      console.log("No ID found. Creating NEW Stripe account...");
+      console.error("No ID found. Creating NEW Stripe account...");
       const newAccount = await stripe.accounts.create({
         type: "express",
         capabilities: {
@@ -540,7 +540,6 @@ router.post("/connect-stripe-account", async (req, res) => {
 });
 
 router.get("/school-stripe-account-status/:schoolId", async (req, res) => {
-  console.log('test hit')
   try {
     const { schoolId } = req.params;
     const school = await schoolModel.findById(schoolId);

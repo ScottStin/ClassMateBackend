@@ -210,7 +210,6 @@ router.patch('/submit-exam/:id', async function (req, res) {
         
                 // Update the response URL
                 submittedStudentResponse.response = result.secure_url;
-                console.log(submittedStudentResponse.response);
             } catch (err) {
                 console.error("Cloudinary upload failed:", err);
             }
@@ -590,11 +589,7 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
       await foundQuestion.save();
     }
 
-    console.log(foundQuestion.examId)
     const course = await courseworkModel.findById(foundQuestion.examId)
-    console.log('course');
-    console.log(course);
-
     const minutes = course.estimatedMinutesToComplete / course.questions.length
 
     if(foundQuestion) {

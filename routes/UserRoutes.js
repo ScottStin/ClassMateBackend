@@ -78,7 +78,7 @@ router.post('/', async (req, res) => {
         // --- upload user photo to cloudinary:
         if(createdUser.profilePicture?.url) {
           await cloudinary.uploader.upload(createdUser.profilePicture.url, {folder: `${createdUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
-            if (err) return console.log(err);  
+            if (err) return console.error(err);  
             createdUser.profilePicture = {url:result.url, fileName:result.public_id};
             await createdUser.save();
           })
@@ -128,14 +128,14 @@ router.patch('/:id', async (req, res) => {
     // Update profile picture in cloud service:
     if(profilePicture) {
       const image = await cloudinary.uploader.upload(req.body.profilePicture.url, {folder: `${updatedUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
-        if (err) return console.log(err);        
+        if (err) return console.error(err);        
         updatedUser.profilePicture = {url:result.url, fileName:result.public_id};
         await updatedUser.save();
         if (image && req.body.previousProfilePicture) {
           try {
             const { fileName } = req.body.previousProfilePicture;
             await cloudinary.uploader.destroy(fileName, (err, result) => {
-              if (err) console.log('Error deleting previous profile picture:', err);
+              if (err) console.error('Error deleting previous profile picture:', err);
             });
           } catch (err) {
             console.error('Error deleting cloudinary link:', err);
@@ -172,11 +172,10 @@ router.delete('/:id', async (req, res) => {
     }
     
     // --- Remove profile picture:
-    console.log(deletedUser.profilePicture)
     if(deletedUser.profilePicture?.url) {
       const { fileName } = deletedUser.profilePicture;
       await cloudinary.uploader.destroy(fileName, (err, result) => {
-        if (err) console.log('Error deleting profile picture:', err);
+        if (err) console.error('Error deleting profile picture:', err);
       });
     }
 

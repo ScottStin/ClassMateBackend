@@ -32,7 +32,6 @@ const openai = new OpenAI({
       formData.append("file", fs.createReadStream(tempFilePath));
       formData.append("model", "whisper-1"); // Whisper model
 
-      // console.log("Sending audio file to Whisper API...");
       //   const whisperResponse = await openai.createTranscription(formData, 'whisper-1');
 
       const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
@@ -46,7 +45,6 @@ const openai = new OpenAI({
 
       // Step 4: Cleanup - Delete temporary file
       // await fs.promises.unlink(tempFilePath);
-      // console.log("Transcription:", transcription);
 
       return transcription;
     } catch (error) {
@@ -646,7 +644,6 @@ const openai = new OpenAI({
     //     try {
     //       if (fs.existsSync(tempFilePath)) {
     //         fs.unlinkSync(tempFilePath);
-    //         console.log("Temporary audio file deleted.");
     //       }
     //     } catch (cleanupError) {
     //       console.error("Failed to delete temporary file:", cleanupError.message);
@@ -741,7 +738,6 @@ const openai = new OpenAI({
     //     try {
     //       if (fs.existsSync(tempFilePath)) {
     //         fs.unlinkSync(tempFilePath);
-    //         console.log("Temporary audio file deleted.");
     //       }
     //     } catch (cleanupError) {
     //       console.error("Failed to delete temporary file:", cleanupError.message);
@@ -832,7 +828,6 @@ const openai = new OpenAI({
     //     try {
     //       if (fs.existsSync(tempFilePath)) {
     //         fs.unlinkSync(tempFilePath);
-    //         console.log("Temporary audio file deleted.");
     //       }
     //     } catch (cleanupError) {
     //       console.error("Failed to delete temporary file:", cleanupError.message);

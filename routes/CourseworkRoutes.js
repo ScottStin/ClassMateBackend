@@ -54,7 +54,7 @@ router.post('/new', async (req, res) => {
     // --- upload photo to cloudinary (todo - move ot service):
     if(createdCourse.courseCoverPhoto?.url) {
       await cloudinary.uploader.upload(createdCourse.courseCoverPhoto.url, {folder: `${req.body.courseData.schoolId}/exam-prompts/${createdCourse._id}/cover-photo`}, async (err, result)=>{
-        if (err) return console.log(err);  
+        if (err) return console.error(err);  
         createdCourse.courseCoverPhoto = {url:result.url, fileName:result.public_id};
       })
     }
@@ -169,7 +169,7 @@ router.patch('/update-course/:id', async (req, res) => {
     
       // upload new cover photo:
       await cloudinary.uploader.upload(courseData.courseCoverPhoto.url, {folder: `${courseData.schoolId}/exam-prompts/${course._id}/cover-photo`}, async (err, result)=>{
-        if (err) return console.log(err);  
+        if (err) return console.error(err);  
         course.courseCoverPhoto = {url:result.url, fileName:result.public_id};
       })
     }

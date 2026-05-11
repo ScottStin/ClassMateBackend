@@ -30,7 +30,6 @@ router.get('/student-activity', async (req, res) => {
  */
 
 const trackStudentActivity = async (schoolId, studentId) => {
-    console.log('hit!!')
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();

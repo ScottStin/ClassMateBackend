@@ -134,7 +134,7 @@ router.post('/', async (req, res) => {
     try {
       if(createdPackage.packageCoverPhoto?.url) {
         await cloudinary.uploader.upload(createdPackage.packageCoverPhoto.url, {folder: `${createdPackage.schoolId}/package-cover-photos`}, async (err, result)=>{
-          if (err) return console.log(err);  
+          if (err) return console.error(err);  
           createdPackage.packageCoverPhoto = {url:result.url, fileName:result.public_id};
           await createdPackage.save();
         })
@@ -186,7 +186,7 @@ router.patch('update-package/:id', async (req, res) => {
     // Update picture in cloud service:
     if(packageCoverPhoto) {
       const image = await cloudinary.uploader.upload(req.body.packageCoverPhoto.url, {folder: `${updatedPackage.schoolId}/package-cover-photos`}, async (err, result)=>{
-        if (err) return console.log(err);        
+        if (err) return console.error(err);        
         updatedPackage.packageCoverPhoto = {url:result.url, fileName:result.public_id};
         await updatedPackage.save();
         if (image && nonUpdatedPackage.packageCoverPhoto) {
@@ -194,7 +194,7 @@ router.patch('update-package/:id', async (req, res) => {
             const { fileName } = nonUpdatedPackage.packageCoverPhoto;
 
             await cloudinary.uploader.destroy(fileName, (err, result) => {
-              if (err) console.log('Error deleting previous cover picture:', err);
+              if (err) console.error('Error deleting previous cover picture:', err);
             });
           } catch (err) {
             console.error('Error deleting cloudinary link:', err);
@@ -385,7 +385,7 @@ router.delete('/:id', async (req, res) => {
     if(deletedPackage.packageCoverPhoto?.url) {
       const { fileName } = deletedPackage.packageCoverPhoto;
       await cloudinary.uploader.destroy(fileName, (err, result) => {
-        if (err) console.log('Error deleting cover picture:', err);
+        if (err) console.error('Error deleting cover picture:', err);
       });
     }
 

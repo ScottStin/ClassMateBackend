@@ -53,7 +53,7 @@ router.post('/new', async (req, res) => {
     // --- upload photo to cloudinary:
     if(createdExam.examCoverPhoto?.url) {
       await cloudinary.uploader.upload(createdExam.examCoverPhoto.url, {folder: `${req.body.examData.schoolId}/exam-prompts/${createdExam._id}/cover-photo`}, async (err, result)=>{
-        if (err) return console.log(err);  
+        if (err) return console.error(err);  
         createdExam.examCoverPhoto = {url:result.url, fileName:result.public_id};
       })
     }
@@ -137,7 +137,7 @@ router.patch('/update-exam/:id', async (req, res) => {
     
       // upload new cover photo:
       await cloudinary.uploader.upload(examData.examCoverPhoto.url, {folder: `${examData.schoolId}/exam-prompts/${exam._id}/cover-photo`}, async (err, result)=>{
-        if (err) return console.log(err);  
+        if (err) return console.error(err);  
         exam.examCoverPhoto = {url:result.url, fileName:result.public_id};
       })
     }
@@ -196,7 +196,6 @@ router.patch('/update-exam/:id', async (req, res) => {
         exam.schoolId
       );
 
-      console.log(created);
       exam.questions.push((created._id ?? created.questionId).toString());
     }
 

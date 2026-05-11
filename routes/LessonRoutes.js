@@ -30,7 +30,6 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
-    console.log(req.body);
     const createdLessons = await lessonModel.insertMany(req.body);
     res.status(201).json(createdLessons);
   
@@ -48,7 +47,6 @@ router.post('/new', async (req, res) => {
 
 router.patch('/update/:id', async (req, res) => {
   try {
-    console.log(req.body);
     const lesson = await lessonModel.findById(req.params.id);
   
     if (!lesson) {
@@ -272,7 +270,6 @@ router.patch('/start-lesson/:id', async (req, res) => {
 
 
     if (!roomResponse.ok) {
-      console.log(roomData);
       throw new Error('Failed to create room: ' + roomData.message);
     }
 

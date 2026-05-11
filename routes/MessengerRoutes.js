@@ -248,8 +248,6 @@ router.patch('/:id', async (req, res) => {
 
 router.patch('/:id/save-to-favorites', async (req, res) => {
   try {
-    
-    console.log('hit')
     const message = await messageModel.findById(req.params.id);
 
     if (!message) {
@@ -261,7 +259,6 @@ router.patch('/:id/save-to-favorites', async (req, res) => {
     }
 
     const userId = req.body.currentUserId;
-    console.log(req.body)
 
     if (message.savedByIds.includes(userId)) {
       // remove userId

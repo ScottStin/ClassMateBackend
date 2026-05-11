@@ -141,7 +141,7 @@ router.patch('/:id', async (req, res) => {
       if (attachment) {
         const { fileName } = unModifiedHomework.attachment;
         await cloudinary.uploader.destroy(fileName, (err, result) => {
-          if (err) console.log('Error deleting previous attachment:', err);
+          if (err) console.error('Error deleting previous attachment:', err);
         });
       }
     }
@@ -196,7 +196,7 @@ router.delete('/bulk-delete', async (req, res) => {
       if(homework.attachment?.fileName) {
         const { fileName } = homework.attachment;
         await cloudinary.uploader.destroy(fileName, (err, result) => {
-          if (err) console.log('Error deleting homework attachment:', err);
+          if (err) console.error('Error deleting homework attachment:', err);
         });
       }
     }
@@ -273,7 +273,7 @@ router.delete('/:id', async (req, res) => {
       if(deletedHomework.attachment?.fileName) {
         const { fileName } = deletedHomework.attachment;
         await cloudinary.uploader.destroy(fileName, (err, result) => {
-          if (err) console.log('Error deleting homework attachment:', err);
+          if (err) console.error('Error deleting homework attachment:', err);
         });
       }
 
@@ -467,7 +467,7 @@ router.post('/delete-comment', async (req, res) => {
     if(commentToDelete.attachment) {
       const { fileName } = commentToDelete.attachment;
       await cloudinary.uploader.destroy(fileName, (err, result) => {
-        if (err) console.log('Error deleting comment attachment:', err);
+        if (err) console.error('Error deleting comment attachment:', err);
       });
     }
 
