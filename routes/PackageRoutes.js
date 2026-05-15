@@ -5,6 +5,8 @@ const { cloudinary, storage } = require('../cloudinary');
 const upload = multer({ storage });
 const { getIo } = require('../socket-io');
 const Stripe = require('stripe');
+const { cancelStudentSubscription } = require('./BillingRoutes');
+
 
 const userModel = require('../models/user-models');
 const packageModel = require('../models/package-model');
@@ -163,7 +165,7 @@ router.post('/', async (req, res) => {
  * ==============================
 */
 
-router.patch('update-package/:id', async (req, res) => {
+router.patch('/update-package/:id', async (req, res) => {
   try {
     // Exclude the profile picture property from the update
     const { packageCoverPhoto, ...updatedFields } = req.body;
@@ -373,28 +375,41 @@ router.patch('/enrol-student/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedPackage = await packageModel.findByIdAndDelete(
-      req.params.id,
-    );
+    const packageToDelete = await packageModel.findById(req.params.id);
 
-    if (!deletedPackage) {
+    if (!packageToDelete) {
       return res.status(404).send('Package not found');
+    }
+
+    // --- cancel student subs
+    if (packageToDelete.type === 'subscription' && packageToDelete.studentsEnrolled.length > 0) {
+      console.log(`Cancelling ${packageToDelete.studentsEnrolled.length} subscriptions for deleted package.`);
+      
+      // Use Promise.allSettled so one failed Stripe call doesn't stop the whole process
+      await Promise.allSettled(
+        packageToDelete.studentsEnrolled.map(enrollment => 
+          cancelStudentSubscription(enrollment.studentId, false) // Immediate cancel
+        )
+      );
     }
     
     // --- Remove profile picture:
-    if(deletedPackage.packageCoverPhoto?.url) {
-      const { fileName } = deletedPackage.packageCoverPhoto;
+    if(packageToDelete.packageCoverPhoto?.url) {
+      const { fileName } = packageToDelete.packageCoverPhoto;
       await cloudinary.uploader.destroy(fileName, (err, result) => {
         if (err) console.error('Error deleting cover picture:', err);
       });
     }
 
+    // --- delete package:
+    await packageToDelete.deleteOne();
+
     // --- emit socket event:
-    if (deletedPackage) {
+    if (packageToDelete) {
       const io = getIo();
-      io.emit('packageEvent-' + deletedPackage.schoolId, {action: 'packageDeleted', data: deletedPackage});
+      io.emit('packageEvent-' + packageToDelete.schoolId, {action: 'packageDeleted', data: packageToDelete});
     }
-    res.status(201).json(deletedPackage);
+    res.status(201).json(packageToDelete);
   } catch (error) {
     console.error('Error deleting package:', error);
     res.status(500).send('Internal Server Error');

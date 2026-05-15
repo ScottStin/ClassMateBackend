@@ -211,11 +211,11 @@ const messengerRouter = require('./routes/MessengerRoutes');
 const conversationRouter = require('./routes/ConversationRoutes');
 const aiExamQuestionFeedbackRouter = require('./routes/AiExamQuestionFeedbackRoutes');
 const aiPromptGeneratorRoute = require('./routes/AiPromptRoutes');
-const billingRoute = require('./routes/BillingRoutes')
-const courseRoute = require('./routes/CourseworkRoutes')
-const packageRoute = require('./routes/PackageRoutes')
-const { router: studentStats } = require('./routes/StudentStatsRoutes')
-const { router: studentActivityRoute } = require('./routes/StudentActivityRoute')
+const { router: billingRoute, } = require('./routes/BillingRoutes');
+const courseRoute = require('./routes/CourseworkRoutes');
+const packageRoute = require('./routes/PackageRoutes');
+const { router: studentStats } = require('./routes/StudentStatsRoutes');
+const { router: studentActivityRoute } = require('./routes/StudentActivityRoute');
 
 app.use('/users', userRouter);
 app.use('/exams', examRouter);

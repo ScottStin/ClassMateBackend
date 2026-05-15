@@ -5,6 +5,7 @@ const schoolModel = require('../models/school-models');
 const Stripe = require('stripe');
 const { PaymentHistory } = require('../models/billing-model');
 const { getIo } = require('../socket-io');
+const { trackStudentActivity } = require('./StudentActivityRoute');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-08-16' // todo - update with latest version.
@@ -226,6 +227,9 @@ router.post('/charge', async (req, res, next) => {
       io.emit('paymentEvent-' + schoolId, {action: 'paymentCreated', data: paymentHistory});
     }
 
+    // Update student activity (student should be marked as active for the month when they make a payment):
+    await trackStudentActivity(user.schoolId, user._id);
+
     res.json({ success: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
     next(err);
@@ -432,6 +436,9 @@ router.post('/start-subscription-payment', async (req, res, next) => {
       io.emit('paymentEvent-' + schoolId, {action: 'paymentCreated', data: paymentHistory});
     }
 
+    // Update student activity (student should be marked as active for the month when they make a payment):
+    await trackStudentActivity(user.schoolId, user._id);
+
     // --- return:
 
     res.json({
@@ -446,46 +453,63 @@ router.post('/start-subscription-payment', async (req, res, next) => {
   }
 });
 
+/**
+ * ===========================================
+ * CANCEL Subscription Payments:
+ * ===========================================
+ */
+
 router.post('/cancel-subscription-payment', async (req, res, next) => {
   try {
     const { studentId, cancelAtPeriodEnd = false } = req.body;
-
-    const user = await userModel.findById(studentId);
-    const subscriptionId = user?.studentBilling?.subscriptionId;
-
-    if (!subscriptionId) {
-      return res.status(404).json({ message: 'No active subscription found for this user' });
+    
+    const result = await cancelStudentSubscription(studentId, cancelAtPeriodEnd);
+    
+    if (!result.success) {
+      return res.status(404).json({ message: result.message });
     }
-
-    let subscription;
-
-    if (cancelAtPeriodEnd) {
-      // 1. Cancel at end of billing cycle
-      // The user remains "active" until the end of the month
-      subscription = await stripe.subscriptions.update(subscriptionId, {
-        cancel_at_period_end: true,
-      });
-    } else {
-      // 2. Cancel immediately
-      // This stops service and billing right now
-      subscription = await stripe.subscriptions.cancel(subscriptionId);
-    }
-
-    // Update your database status
-    user.studentBilling.subscriptionStatus = 'canceled'; // subscription.status; // will be 'active' (with cancel_at_period_end: true) or 'canceled'
-    await user.save();
 
     res.json({
       success: true,
       message: cancelAtPeriodEnd 
-        ? 'Subscription will cancel at the end of the current period' 
+        ? 'Subscription will cancel at the end of current period' 
         : 'Subscription canceled immediately',
-      subscription,
     });
   } catch (err) {
     next(err);
   }
 });
+
+async function cancelStudentSubscription (studentId, cancelAtPeriodEnd = false) {
+  const user = await userModel.findById(studentId);
+  const subscriptionId = user?.studentBilling?.subscriptionId;
+
+  if (!subscriptionId) {
+    return { success: false, message: 'No active subscription found' };
+  }
+
+  if (cancelAtPeriodEnd) {
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+    });
+  } else {
+    await stripe.subscriptions.cancel(subscriptionId);
+  }
+
+  // Update DB status
+  if (user.studentBilling) {
+    user.studentBilling.subscriptionStatus = 'canceled';
+    await user.save();
+  }
+
+  // update current use value for student:
+  if (user) {
+    const io = getIo();
+    io.emit('authStoreEvent-' + studentId, { action: 'currentUserUpdated', data: user });
+  }
+
+  return { success: true };
+};
 
 /**
  * ===========================================
@@ -635,4 +659,7 @@ async function getOrCreateStripeCustomer(user) {
   return customer.id;
 }
 
-module.exports = router;
+module.exports = {
+  router,
+  cancelStudentSubscription,
+};

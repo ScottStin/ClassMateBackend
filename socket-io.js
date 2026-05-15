@@ -89,10 +89,10 @@ async function updateUserStatus(userId, status) {
                 const isStillConnected = userSocketCount.has(userId);
 
                 if (isStillConnected) {
-                    console.log(`User ${userId} confirmed active after 60s. Tracking...`);
+                    console.log(`User ${userId} confirmed active after 10s. Tracking...`);
                     await trackStudentActivity(user.schoolId, userId);
                 } else {
-                    console.log(`User ${userId} disconnected before 60s. Activity not tracked.`);
+                    console.log(`User ${userId} disconnected before 10s. Activity not tracked.`);
                 }
             }, 10000);
         }
