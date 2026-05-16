@@ -6,6 +6,7 @@ const Stripe = require('stripe');
 const { PaymentHistory } = require('../models/billing-model');
 const { getIo } = require('../socket-io');
 const { trackStudentActivity } = require('./StudentActivityRoute');
+const packageModel = require('../models/package-model');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-08-16' // todo - update with latest version.
@@ -325,11 +326,17 @@ router.post('/start-subscription-payment', async (req, res, next) => {
         return res.status(400).json({ message: 'Missing required parameters.' });
       }
 
+      // --- get package:
+      const packageData = await packageModel.findById(packageId);
+      if (!packageData) {
+        return res.status(404).json({ message: 'Package template not found' });
+      }
+
+      // --- get school stripe account:
       const school = await schoolModel.findById(schoolId);
       let schoolStripeAccountId = school?.stripe?.stripeAccountId;
 
     // --- get user:
-
     const user = await userModel.findById(studentId);
     if (!user?.studentBilling?.stripeCustomerId) {
       return res.status(400).json({ message: 'User does not have a Stripe Customer ID' });
@@ -368,14 +375,32 @@ router.post('/start-subscription-payment', async (req, res, next) => {
       return res.status(400).json({ message: 'No default payment method on file' });
     }
 
-    // --- Create the Subscription
+    // --- Calculate Stripe Auto-Cancel Timestamp if paymentLength exists 
+    let cancelAtTimestamp = undefined;
+    
+    if (packageData.paymentLength && packageData.subscriptionFrequency) {
+      const endDate = new Date();
+      const length = packageData.paymentLength;
 
+      if (packageData.subscriptionFrequency === 'weekly') {
+        endDate.setDate(endDate.getDate() + (length * 7));
+      } else if (packageData.subscriptionFrequency === 'monthly') {
+        endDate.setMonth(endDate.getMonth() + length);
+      } else if (packageData.subscriptionFrequency === 'yearly') {
+        endDate.setFullYear(endDate.getFullYear() + length);
+      }
+
+      cancelAtTimestamp = Math.floor(endDate.getTime() / 1000); // Convert Javascript milliseconds to Stripe Unix seconds
+    }
+
+    // --- Create the Subscription with cancel_at 
     const subscription = await stripe.subscriptions.create({
       customer: user.studentBilling.stripeCustomerId,
       description: description || `Subscription for ${user.email}`,
       items: [{ price: stripePriceId }],
       default_payment_method: paymentMethodId,
-      payment_behavior: 'error_if_incomplete', // This makes Stripe fail if it cannot charge immediately
+      payment_behavior: 'error_if_incomplete',
+      cancel_at: cancelAtTimestamp, // STRIPE WILL AUTO-CANCEL ON THIS EXACT UNIX TIMESTAMP
 
       transfer_data: {
         destination: schoolStripeAccountId, // The school gets the payment
@@ -398,36 +423,38 @@ router.post('/start-subscription-payment', async (req, res, next) => {
     await user.save();
 
     // Create PaymentIntent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(price * 100),
-      currency: 'usd',
-      customer: user.studentBilling.stripeCustomerId,
-      payment_method: paymentMethodId,
-      off_session: true,
-      confirm: true,
-      description,
-      transfer_data: {
-        destination: schoolStripeAccountId, // ensure the funds go to the correct school
-      },
-      metadata: {
-        userId: user._id.toString(),
-        schoolId: schoolId,
-        paymentType: 'student_to_school',
-      },
-    });
+    // const paymentIntent = await stripe.paymentIntents.create({
+    //   amount: Math.round(price * 100),
+    //   currency: 'usd',
+    //   customer: user.studentBilling.stripeCustomerId,
+    //   payment_method: paymentMethodId,
+    //   off_session: true,
+    //   confirm: true,
+    //   description,
+    //   transfer_data: {
+    //     destination: schoolStripeAccountId, // ensure the funds go to the correct school
+    //   },
+    //   metadata: {
+    //     userId: user._id.toString(),
+    //     schoolId: schoolId,
+    //     paymentType: 'student_to_school',
+    //   },
+    // }); // NOTE - not needed because await stripe.subscriptions.create already charges the student
+
+    const automaticPaymentIntent = subscription.latest_invoice?.payment_intent;
 
     // Save payment history
     const paymentHistory = await PaymentHistory.create({
       userId: user._id,
       schoolId: schoolId,
-      stripePaymentIntentId: paymentIntent.id,
+      stripePaymentIntentId: automaticPaymentIntent?.id,
       stripeCustomerId: user.studentBilling.stripeCustomerId,
       amount: price,
       description: description || `Subscription for ${user.email}`,
       currency: 'usd',
-      status: 'paid',
+      status: automaticPaymentIntent?.status === 'succeeded' ? 'paid' : 'pending',
       paymentType: 'student_to_school',
-      stripeCreatedAt: paymentIntent.created,
+      stripeCreatedAt: automaticPaymentIntent?.created || Math.floor(Date.now() / 1000),
     });
 
     // --- emit socket event:
