@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { getIo } = require('../socket-io');
 
-const StudentEntry = require('../models/student-stats-model');
+const StudentStats = require('../models/student-stats-model');
 const UserModel = require('../models/user-models');
 
 router.get('/', async (req, res) => {
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
     if (studentId) filter.studentId = studentId;
 
     // 3. Execute query with sorting
-    const stats = await StudentEntry.find(filter).sort({ date: -1 });
+    const stats = await StudentStats.find(filter).sort({ date: -1 });
 
     res.json(stats);
   } catch (error) {
@@ -72,7 +72,7 @@ const createStudentStat = async (data) => {
   // upsert: true (create if doesn't exist)
   // new: true (return the updated document)
   // runValidators: true (ensure enum check still works)
-  const newEntry = await StudentEntry.findOneAndUpdate(filter, update, {
+  const newEntry = await StudentStats.findOneAndUpdate(filter, update, {
     upsert: true,
     new: true,
     runValidators: true

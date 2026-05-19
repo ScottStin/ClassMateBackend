@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const entrySchema = mongoose.Schema({
+const statsSchema = mongoose.Schema({
     studentId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'userModel',
@@ -32,6 +32,6 @@ const entrySchema = mongoose.Schema({
 });
 
 // This ensures no two documents can have the same studentId AND referenceId
-entrySchema.index({ studentId: 1, referenceId: 1 }, { unique: true });
+statsSchema.index({ studentId: 1, referenceId: 1 }, { unique: true });
 
-module.exports = mongoose.model('StudentEntry', entrySchema);
+module.exports = mongoose.model('StudentStats', statsSchema);
