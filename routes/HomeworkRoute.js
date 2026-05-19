@@ -7,7 +7,7 @@ const { getIo } = require('../socket-io'); // Import the getIo function
 const { deleteFile } = require('../file-helper.js');
 const { createStudentStat } = require('./StudentStatsRoutes.js');
 
-const homeworkModel = require('../models/homework-model');
+const { homeworkModel, homeworkCommentModel } = require('../models/homework-model');
 
 /**
  * Helper function to delete comment attachments from Cloudinary
@@ -22,7 +22,7 @@ const deleteCommentAttachments = (comments) => {
 
 /**
  * ==============================
- *  Homework
+ *  Get Homework
  * ==============================
  */
 
@@ -47,6 +47,12 @@ router.get('/', async function (req, res) {
         res.status(500).send("Internal Server Error");
     }
 });
+
+/**
+ * ==============================
+ *  Create new homework item
+ * ==============================
+ */
 
 router.post('/', async (req, res) => {
   try {
@@ -73,6 +79,12 @@ router.post('/', async (req, res) => {
   }
 });
 
+/**
+ * ==============================
+ *  Enroll new students in homework
+ * ==============================
+ */
+
 router.patch('/enrol-students/:id', async (req, res) => {
   try {
     const homework = await homeworkModel.findById(req.params.id);
@@ -90,9 +102,9 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     // Delete comments and attachments for removed students
     if (removedStudentIds.length > 0) {
-      const commentsToDelete = homework.comments.filter(comment => removedStudentIds.includes(comment.studentId.toString()));
+      const commentsToDelete = await homeworkCommentModel.find({ homeworkId: homework._id, studentId: { $in: removedStudentIds } });
       deleteCommentAttachments(commentsToDelete);
-      homework.comments = homework.comments.filter(comment => !removedStudentIds.includes(comment.studentId.toString()));
+      await homeworkCommentModel.deleteMany({ homeworkId: homework._id, studentId: { $in: removedStudentIds } });
     }
 
     // Remove students not in req.body from homework.students
@@ -116,6 +128,12 @@ router.patch('/enrol-students/:id', async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+/**
+ * ==============================
+ *  Modify homework
+ * ==============================
+ */
 
 router.patch('/:id', async (req, res) => {
   try {
@@ -147,18 +165,15 @@ router.patch('/:id', async (req, res) => {
     }
 
     if (updatedHomework) {
-      res.status(200).json(updatedHomework);
-
       // --- remove comments from removed students
       const currentStudentList = unModifiedHomework.students.map(student => student.studentId.toString());
       const newStudentList = req.body.students.map(student => student.studentId.toString());
       const removedStudents = currentStudentList.filter(studentId => !newStudentList.includes(studentId));
       
       if (removedStudents.length > 0) {
-        const commentsToDelete = updatedHomework.comments.filter(comment => removedStudents.includes(comment.studentId.toString()));
+        const commentsToDelete = await homeworkCommentModel.find({ homeworkId: updatedHomework._id, studentId: { $in: removedStudents } });
         deleteCommentAttachments(commentsToDelete);
-        updatedHomework.comments = updatedHomework.comments.filter(comment => !removedStudents.includes(comment.studentId.toString()));
-        await updatedHomework.save();
+        await homeworkCommentModel.deleteMany({ homeworkId: updatedHomework._id, studentId: { $in: removedStudents } });
       }
 
       // Emit event to all connected clients after homework is updated
@@ -166,6 +181,8 @@ router.patch('/:id', async (req, res) => {
         const io = getIo();
         io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkUpdated', data: updatedHomework});
       }
+
+      res.status(200).json(updatedHomework);
     } else {
       res.status(404).json({ message: "Homework not found" });
     }
@@ -175,34 +192,45 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+/**
+ * ==============================
+ *  Delete homework
+ * ==============================
+ */
+
 router.delete('/bulk-delete', async (req, res) => {
   try {
     const homeworkIds = req.body;
-
     if (!Array.isArray(homeworkIds) || homeworkIds.length === 0) {
       return res.status(400).json({ message: 'No homework ids provided' });
     }
 
-    // Find homework first so we can return + emit them
     const homeworkToDelete = await homeworkModel.find({ _id: { $in: homeworkIds } });
-
     if (homeworkToDelete.length === 0) {
       return res.status(404).json({ message: 'No homework found' });
     }
 
-    // --- delete comment and homework attachments:
-    for(const homework of homeworkToDelete) {
-      deleteCommentAttachments(homework.comments);
-      if(homework.attachment?.fileName) {
-        const { fileName } = homework.attachment;
-        await cloudinary.uploader.destroy(fileName, (err, result) => {
-          if (err) console.error('Error deleting homework attachment:', err);
-        });
+    // 1. Fetch ALL comments for ALL matching homework items in one single query
+    const allCommentsToDelete = await homeworkCommentModel.find({ homeworkId: { $in: homeworkIds } });
+    
+    // 2. Clear comment file attachments from Cloudinary
+    deleteCommentAttachments(allCommentsToDelete);
+
+    // 3. Clear homework file attachments from Cloudinary
+    for (const homework of homeworkToDelete) {
+      if (homework.attachment?.fileName) {
+        await cloudinary.uploader.destroy(homework.attachment.fileName).catch(err => 
+          console.error('Error deleting homework attachment:', err)
+        );
       }
     }
 
-  // Now delete homework
-    await homeworkModel.deleteMany({ _id: { $in: homeworkIds } });
+    // 4. Batch delete all comment documents and homework documents simultaneously
+    await Promise.all([
+      homeworkCommentModel.deleteMany({ homeworkId: { $in: homeworkIds } }),
+      homeworkModel.deleteMany({ _id: { $in: homeworkIds } })
+    ]);
+
     res.status(200).json(homeworkToDelete);
 
     // Emit socket events
@@ -240,11 +268,11 @@ router.delete('/remove-student', async (req, res) => {
     homeworkItem.students = homeworkItem.students.filter((student) => student.studentId !== studentId);
 
     // Delete comments and attachments for the removed student
-    const commentsToDelete = homeworkItem.comments.filter((comment) => comment.studentId.toString() === studentId);
+    const commentsToDelete = await homeworkCommentModel.find({ homeworkId: homeworkItem._id, studentId: studentId });
     deleteCommentAttachments(commentsToDelete);
 
     // Correctly filter out comments by the student
-    homeworkItem.comments = homeworkItem.comments.filter((comment) => comment.studentId.toString() !== studentId);
+    await homeworkCommentModel.deleteMany({ homeworkId: homeworkItem._id, studentId: studentId });
 
     await homeworkItem.save();
 
@@ -267,7 +295,9 @@ router.delete('/:id', async (req, res) => {
     if (deletedHomework) {
 
       // --- delete comment attachments:
-      deleteCommentAttachments(deletedHomework.comments);
+      const commentsToDelete = await homeworkCommentModel.find({ homeworkId: deletedHomework._id });
+      deleteCommentAttachments(commentsToDelete);
+      await homeworkCommentModel.deleteMany({ homeworkId: deletedHomework._id });
 
       // --- delete homework attachment:
       if(deletedHomework.attachment?.fileName) {
@@ -295,9 +325,38 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * ==============================
- *  Comments (TODO - move comments to their own service and create dedicated comment model/route in backend)
+ *  Comments
  * ==============================
  */
+
+router.get('/comments', async (req, res) => {
+  try {
+    const { homeworkIds, studentId } = req.query;
+
+    if (!homeworkIds) {
+      return res.status(400).send("homeworkIds parameter is required");
+    }
+
+    const idArray = homeworkIds.split(',');
+
+    const query = {
+      homeworkId: { $in: idArray }
+    };
+
+    if (studentId) {
+      query.studentId = studentId;
+    }
+
+    const comments = await homeworkCommentModel
+      .find(query)
+      .sort({ createdAt: -1 });
+
+    res.json(comments);
+  } catch (error) {
+    console.error("Error fetching comments:", error);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 router.post('/new-comment', async (req, res) => {
   try {
@@ -307,31 +366,23 @@ router.post('/new-comment', async (req, res) => {
       
     const updatedHomework = await homeworkModel.findById(homeworkId);
 
-    updatedHomework.comments.push(newComment);
-    await updatedHomework.save();
-  
     if (!updatedHomework) {
       return res.status(404).json({ error: 'Homework not found' });
     }
 
-    // --- set student.completed to true from this homework item if the student passed this submission attempt:
-    if (newComment.pass === true) {
-      const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.studentId);
-      if (studentIndex !== -1) {
-        updatedHomework.students[studentIndex].completed = true;
-      }
-    }
-    await updatedHomework.save();
-
-    // --- upload attachment:
-    if (newComment.attachment && newComment.attachment?.url && newComment.attachment?.url !== '' && newComment.attachment?.fileName !== '' && req.body.schoolId) {
-      const lastIndex = updatedHomework.comments.length - 1;
+    const commentDoc = new homeworkCommentModel({ homeworkId, ...newComment });
+    if (newComment.attachment?.url && req.body.schoolId) {
       const attachment = await cloudinary.uploader.upload(newComment.attachment.url, { folder: `${req.body.schoolId}/homework-comment-attachments` });
-      updatedHomework.comments[lastIndex].attachment = { url: attachment.url, fileName: attachment.public_id };
+      commentDoc.attachment = { url: attachment.url, fileName: attachment.public_id };
+    }
+    await commentDoc.save();
+
+    // --- update student 'pass' status in homework item if comment.pass === true
+    const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.studentId);
+    if (studentIndex !== -1 && newComment.commentType.toLowerCase() === 'feedback') {
+      updatedHomework.students[studentIndex].completed = (newComment.pass === true);
       await updatedHomework.save();
     }
-
-    res.status(201).json(updatedHomework);
 
     // --- add student stats:
     if(newComment.commentType === 'feedback' && newComment.duration > 0) {
@@ -345,10 +396,14 @@ router.post('/new-comment', async (req, res) => {
       })
     }
 
+    res.status(201).json({ comment: commentDoc, homework: updatedHomework });
+
     // --- socket io:
     if(updatedHomework.schoolId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentCreated', data: updatedHomework});
+      getIo().emit('homeworkEvent-' + updatedHomework.schoolId, {
+        action: 'homeworkCommentCreated', 
+        data: { comment: commentDoc, homework: updatedHomework }
+      });
     }
   } catch (error) {
     console.error("Error adding comment to homework:", error);
@@ -368,33 +423,16 @@ router.post('/update-comment', async (req, res) => {
     }
   
     // --- filter comments from homework item to match the req.body.commentType
-    comments = updatedHomework.comments
+    const commentToUpdate = await homeworkCommentModel.findOne({
+      homeworkId,
+      commentType: { $regex: new RegExp(`^${newComment.commentType}$`, 'i') },
+      ...(newComment.commentType.toLowerCase() === 'submission' ? { studentId: newComment.studentId } : { teacherId: newComment.teacherId })
+    }).sort({ createdAt: -1 });
 
-    filteredComments = comments.filter((comment)=>
-      comment.commentType.toLowerCase() === newComment.commentType.toLowerCase() && 
-      (
-        (comment.commentType.toLowerCase() === 'submission' && comment.studentId === newComment.studentId) || 
-        (comment.commentType.toLowerCase() === 'feedback' && comment.teacherId === newComment.teacherId)
-      )
-    );
-    
-    if (filteredComments.length === 0) {
-      return res.status(404).json({ error: 'Comments not found' });
-    }
-  
-    // --- get last comment in array
-    lastComment = filteredComments[filteredComments.length -1]
-    
-    // --- replace last comment with new comment
-    const commentIndex = updatedHomework.comments.findIndex(comment => comment._id.equals(lastComment._id));
+    if (!commentToUpdate) return res.status(404).json({ error: 'Comment not found' });
 
-    if (commentIndex !== -1) {
-      updatedHomework.comments[commentIndex] = newComment;
-      updatedHomework.comments[commentIndex].createdAt = new Date();
-      await updatedHomework.save();
-    } else {
-      return res.status(404).json({ error: 'Comment id not found' });
-    }
+    Object.assign(commentToUpdate, newComment);
+    await commentToUpdate.save();
   
     // --- update student 'pass' status in homework item if comment.pass === true
     const studentIndex = updatedHomework.students.findIndex(student => student.studentId === newComment.studentId);
@@ -403,12 +441,14 @@ router.post('/update-comment', async (req, res) => {
       await updatedHomework.save();
     }
 
-    res.status(201).json(updatedHomework);
+    res.status(201).json({ comment: commentToUpdate, homework: updatedHomework });
 
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
     if(updatedHomework.schoolId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentUpdated', data: updatedHomework});
+      getIo().emit('homeworkEvent-' + updatedHomework.schoolId, {
+        action: 'homeworkCommentUpdated', 
+        data: { comment: commentToUpdate, homework: updatedHomework }
+      });
     }
     
   } catch (error) {
@@ -429,32 +469,18 @@ router.post('/delete-comment', async (req, res) => {
     }
   
     // --- filter comments from homework item to match the req.body.commentType
-    comments = updatedHomework.comments
+    const commentToDeleteDoc = await homeworkCommentModel.findOne({
+      homeworkId,
+      commentType: { $regex: new RegExp(`^${commentToDelete.commentType}$`, 'i') },
+      ...(commentToDelete.commentType.toLowerCase() === 'submission' ? { studentId: commentToDelete.studentId } : { teacherId: commentToDelete.teacherId })
+    }).sort({ createdAt: -1 });
 
-    filteredComments = comments.filter((comment)=>
-      comment.commentType.toLowerCase() === commentToDelete.commentType.toLowerCase() && 
-      (
-        (comment.commentType.toLowerCase() === 'submission' && comment.studentId === commentToDelete.studentId) || 
-        (comment.commentType.toLowerCase() === 'feedback' && comment.teacherId === commentToDelete.teacherId)
-      )
-    );
-    
-    if (filteredComments.length === 0) {
-      return res.status(404).json({ error: 'Comments not found' });
-    }
-  
-    // --- get last comment in array
-    lastComment = filteredComments[filteredComments.length -1]
-    
-    // --- delete last comment
-    const commentIndex = updatedHomework.comments.findIndex(comment => comment._id.equals(lastComment._id));
+    if (!commentToDeleteDoc) return res.status(404).json({ error: 'Comment not found' });
 
-    if (commentIndex !== -1) {
-      updatedHomework.comments.splice(commentIndex, 1);
-      await updatedHomework.save();
-    } else {
-      return res.status(404).json({ error: 'Comment id not found' });
+    if(commentToDeleteDoc.attachment?.fileName) {
+      await cloudinary.uploader.destroy(commentToDeleteDoc.attachment.fileName);
     }
+    await homeworkCommentModel.findByIdAndDelete(commentToDeleteDoc._id);
   
     // --- update student 'pass' status in homework item
     const studentIndex = updatedHomework.students.findIndex(student => student.studentId === commentToDelete.studentId);
@@ -463,20 +489,14 @@ router.post('/delete-comment', async (req, res) => {
       await updatedHomework.save();
     }
 
-    // Remove comment attachment:
-    if(commentToDelete.attachment) {
-      const { fileName } = commentToDelete.attachment;
-      await cloudinary.uploader.destroy(fileName, (err, result) => {
-        if (err) console.error('Error deleting comment attachment:', err);
-      });
-    }
-
-    res.status(201).json(updatedHomework);
+    res.status(201).json({ comment: commentToDeleteDoc, homework: updatedHomework });
 
     // Emit event to all connected clients after comment is created - emit notification of feedback to student
     if(updatedHomework.schoolId) {
-      const io = getIo();
-      io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkCommentDeleted', data: updatedHomework});
+      getIo().emit('homeworkEvent-' + updatedHomework.schoolId, {
+        action: 'homeworkCommentDeleted', 
+        data: { comment: commentToDeleteDoc, homework: updatedHomework }
+      });
     }
   } catch (error) {
     console.error("Error modifying comment on homework:", error);
