@@ -97,7 +97,7 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     // Get current and new student IDs
     const currentStudentIds = homework.students.map(s => s.studentId);
-    const newStudentIds = studentIds.map(s => s._id);
+    const newStudentIds = req.body.studentIds || [];
     const removedStudentIds = currentStudentIds.filter(id => !newStudentIds.includes(id));
 
     // Delete comments and attachments for removed students
@@ -111,9 +111,9 @@ router.patch('/enrol-students/:id', async (req, res) => {
     homework.students = homework.students.filter(s => newStudentIds.includes(s.studentId));
 
     // Add new students to homework.students
-    for(const s of studentIds) {
-      if (!homework.students.some(st => st.studentId === s._id)) {
-        homework.students.push({ studentId: s._id, completed: false });
+    for (const id of newStudentIds) {
+      if (!homework.students.some(st => st.studentId.toString() === id)) {
+        homework.students.push({ studentId: id, completed: false });
       }
     }
     await homework.save();
@@ -320,6 +320,94 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error("Error deleting Homework:", error);
     res.status(500).send("Internal Server Error");
+  }
+});
+
+/**
+ * ==============================
+ *  Side nav Badge
+ * ==============================
+ */
+
+router.get('/badge-count', async (req, res) => {
+  try {
+    const { userId, userType } = req.query;
+
+    console.log(userId)
+    console.log(userType)
+
+    if (!userId || !userType) {
+      return res.status(400).json({ message: 'Missing userId or userType parameters.' });
+    }
+
+    // --- STUDENT BADGE COUNT CALCULATIONS ---
+    if (userType === 'student') {
+      const incompleteCount = await homeworkModel.countDocuments({
+        students: {
+          $elemMatch: { studentId: userId, completed: false }
+        }
+      });
+
+      console.log(incompleteCount);
+      return res.json({ count: incompleteCount });
+    }
+
+    // --- TEACHER BADGE COUNT CALCULATIONS ---
+    if (userType === 'teacher') {
+      const pipeline = [
+        // Step 1: Filter down strictly to this teacher's active assignments
+        { $match: { assignedTeacherId: userId } },
+        
+        // Step 2: Join the comments using the indexed compound reference
+        {
+          $lookup: {
+            from: 'homeworkcommentmodels', // Double-check exact collection name in MongoDB
+            localField: '_id',
+            foreignField: 'homeworkId',
+            as: 'comments'
+          }
+        },
+        
+        // Step 3: Project the document layout to find the absolute latest comment
+        {
+          $project: {
+            latestComment: {
+              $arrayElemAt: [
+                {
+                  $sortArray: { 
+                    input: '$comments', 
+                    sortBy: { createdAt: -1 } 
+                  }
+                },
+                0
+              ]
+            }
+          }
+        },
+        
+        // Step 4: Keep documents only where the most recent comment is a submission needing review
+        { 
+          $match: { 
+            'latestComment.commentType': 'submission' 
+          } 
+        },
+        
+        // Step 5: Count the remaining rows cleanly
+        { $count: 'total' }
+      ];
+
+      const result = await homeworkModel.aggregate(pipeline);
+      const count = result.length > 0 ? result[0].total : 0;
+      
+      return res.json({ count });
+    }
+
+    // Fallback default for alternative roles like 'school' or administrators
+    return res.json({ count: 0 });
+
+  } catch (error) {
+    console.error('Error computing badge count state:', error);
+    return res.status(500).send('Internal Server Error');
   }
 });
 
