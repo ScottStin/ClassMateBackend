@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
     // Emit event to all connected clients after homework is created
     if(createdHomework.schoolId) {
       const io = getIo();
-      io.emit('homeworkEvent-' + createdHomework.schoolId, {action: 'homeworkCreated', data: createdHomework});
+      io.emit('homeworkEvent-' + createdHomework.schoolId, {action: 'homeworkCreated', data: {homework: createdHomework}});
     }
   } catch (error) {
     console.error("Error creating new homework:", error);
@@ -121,7 +121,7 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     if(homework?.schoolId) {
       const io = getIo();
-      io.emit('homeworkEvent-' + homework.schoolId, {action: 'homeworkUpdated', data: homework});
+      io.emit('homeworkEvent-' + homework.schoolId, {action: 'homeworkUpdated', data: {homework: homework}});
     }
   } catch (error) {
     console.error("Error enrolling students in homework:", error);
@@ -179,7 +179,7 @@ router.patch('/:id', async (req, res) => {
       // Emit event to all connected clients after homework is updated
       if(updatedHomework.schoolId) {
         const io = getIo();
-        io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkUpdated', data: updatedHomework});
+        io.emit('homeworkEvent-' + updatedHomework.schoolId, {action: 'homeworkUpdated', data: {homework: updatedHomework}});
       }
 
       res.status(200).json(updatedHomework);
@@ -239,7 +239,7 @@ router.delete('/bulk-delete', async (req, res) => {
       if(homework?.schoolId) {
         io.emit(
           'homeworkEvent-' + homework.schoolId,
-          { action: 'homeworkDeleted', data: homework}
+          { action: 'homeworkDeleted', data: {homework: homework} }
         );
       }
     });
@@ -281,7 +281,7 @@ router.delete('/remove-student', async (req, res) => {
     // Emit event to all connected clients after homework is updated
     if(homeworkItem.schoolId) {
         const io = getIo();
-        io.emit('homeworkEvent-' + homeworkItem.schoolId, {action: 'homeworkUpdated', data: homeworkItem});
+        io.emit('homeworkEvent-' + homeworkItem.schoolId, {action: 'homeworkUpdated', data: {homework: homeworkItem}});
     }
   } catch (error) {
     console.error("Error removing student from Homework:", error);
@@ -312,7 +312,7 @@ router.delete('/:id', async (req, res) => {
       // Emit socket events
       if(deletedHomework?.schoolId) {
         const io = getIo();
-        io.emit('homeworkEvent-' + deletedHomework.schoolId, {action: 'homeworkDeleted', data: deletedHomework});
+        io.emit('homeworkEvent-' + deletedHomework.schoolId, {action: 'homeworkDeleted', data: {homework: deletedHomework}});
       }
     } else {
       res.status(404).json({ message: "Homework not found" });
