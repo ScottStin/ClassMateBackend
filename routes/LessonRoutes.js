@@ -30,6 +30,17 @@ router.get('/', async function (req, res) {
 
 router.post('/new', async (req, res) => {
   try {
+    const invalidLesson = req.body.find(lesson =>
+      isMoreThanOneYearInFuture(lesson.startTime)
+    );
+
+    if (invalidLesson) {
+      return res.status(400).json({
+        message: 'Lesson start date cannot be more than 1 year in the future.'
+      });
+    }
+
+
     const createdLessons = await lessonModel.insertMany(req.body);
     res.status(201).json(createdLessons);
   
@@ -47,6 +58,16 @@ router.post('/new', async (req, res) => {
 
 router.patch('/update/:id', async (req, res) => {
   try {
+
+    if (
+      req.body.startTime &&
+      isMoreThanOneYearInFuture(req.body.startTime)
+    ) {
+      return res.status(400).json({
+        message: 'Lesson start date cannot be more than 1 year in the future.'
+      });
+    }
+
     const lesson = await lessonModel.findById(req.params.id);
   
     if (!lesson) {
@@ -67,6 +88,19 @@ router.patch('/update/:id', async (req, res) => {
     res.status(500).send("Internal Server Error");
   }
 });
+
+function isMoreThanOneYearInFuture(startTime) {
+  const lessonDate = new Date(startTime);
+
+  if (isNaN(lessonDate.getTime())) {
+    return true; // invalid date
+  }
+
+  const maxDate = new Date();
+  maxDate.setFullYear(maxDate.getFullYear() + 1);
+
+  return lessonDate > maxDate;
+}
 
 router.patch('/register/:id', async (req, res) => {
   try {

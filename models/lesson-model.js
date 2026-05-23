@@ -64,6 +64,9 @@ const lessonSchema = mongoose.Schema({
     status:{
         type: String // started, finished
     },
+    recording: {
+        type: String
+    },
 }, {
     timestamps: true
 })
