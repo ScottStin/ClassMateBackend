@@ -37,6 +37,12 @@ const schoolSchema = mongoose.Schema({
         type: String,
         maxlength: 250,
     },
+    freeInitClassHours:{
+        type: Number,
+        min: 0,
+        max: 480,
+        default: 60,
+    },
     backgroundImage: {
         name:String,
         label:String,

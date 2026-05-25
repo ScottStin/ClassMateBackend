@@ -12,6 +12,7 @@ const examModel = require('../models/exam-model');
 const questionModel = require('../models/question-model');
 const userModel = require('../models/user-models');
 const homeworkModel = require('../models/homework-model');
+const schoolModel = require('../models/school-models');
 
 /**
  * ==============================
@@ -74,6 +75,14 @@ router.post('/', async (req, res) => {
           exam.studentsEnrolled.push(userId);
           await exam.save();
         }
+
+        // --- add trial class minutes:
+        const school = await schoolModel.findOne({ _id: req.body.schoolId });
+        if (!school) {
+          return res.status(404).json('School not found');
+        }
+        createdUser.bulkPaymentClassHours = (school.freeInitClassHours ?? 0) / 60;
+        await createdUser.save();
 
         // --- upload user photo to cloudinary:
         if(createdUser.profilePicture?.url) {
