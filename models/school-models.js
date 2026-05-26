@@ -75,6 +75,14 @@ const schoolSchema = mongoose.Schema({
             shortName: String,
         }
     ],
+    accreditationNumber: { 
+        label: {
+            type: String,
+        }, 
+        value:  {
+            type: String,
+        }, 
+    },
     stripe: {
         stripeAccountId: {
             type: String,
