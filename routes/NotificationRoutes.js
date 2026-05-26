@@ -5,25 +5,49 @@ const { getIo } = require('../socket-io'); // Import the getIo function
 const notificationsModel = require('../models/notification-model');
 
 router.get('/', async function (req, res) {
-    try {
-        // Extract the currentUserId from the query parameters
-        const currentUserId = req.query.currentUserId;
+  try {
+    const currentUserId = req.query.currentUserId;
+    const readLimit = parseInt(req.query.readLimit || 50);
 
-        // If currentUserId is provided, filter notifications by schoolId
-        let filter = {};
-        if (currentUserId) {
-            filter = { recipients: { $in: [currentUserId] } };
-          }
-
-        // Find notifications based on the filter
-        const notifications = await notificationsModel.find(filter);
-
-        // Send the filtered notifications as the response
-        res.json(notifications);
-    } catch (error) {
-        console.error("Error getting notifications:", error);
-        res.status(500).send("Internal Server Error");
+    if (!currentUserId) {
+      return res.status(400).send('currentUserId is required');
     }
+
+    const baseFilter = {
+      recipients: { $in: [currentUserId] }
+    };
+
+    // Get all unread notifications
+    const unreadNotifications = await notificationsModel
+      .find({
+        ...baseFilter,
+        seenBy: { $ne: currentUserId }
+      })
+      .sort({ createdAt: -1 });
+
+    // Get paginated read notifications
+    const readNotifications = await notificationsModel
+      .find({
+        ...baseFilter,
+        seenBy: currentUserId
+      })
+      .sort({ createdAt: -1 })
+      .limit(readLimit);
+
+    const notifications = [
+      ...unreadNotifications,
+      ...readNotifications
+    ];
+
+    res.json({
+      notifications,
+      unreadCount: unreadNotifications.length,
+      hasMoreRead: readNotifications.length === readLimit
+    });
+  } catch (error) {
+    console.error('Error getting notifications:', error);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 router.post('/new', async (req, res) => {
@@ -49,24 +73,20 @@ router.post('/new', async (req, res) => {
 router.post('/mark-as-seen', async (req, res) => {
   try {
     const currentUserId = req.body.currentUserId;
-    const notifications = req.body.notifications; // Assuming notifications is an array
 
-    for (const notification of notifications) {
-      const foundNotification = await notificationsModel.findOne({ _id: notification._id });
-      if (foundNotification) {
-
-        // Add the current user's ID to the 'seenBy' array if it's not already there
-        if (!foundNotification.seenBy.includes(currentUserId)) {
-          foundNotification.seenBy.push(currentUserId);
-          await foundNotification.save();
-        }
+    await notificationsModel.updateMany(
+      {
+        seenBy: { $ne: currentUserId }
+      },
+      {
+        $addToSet: { seenBy: currentUserId }
       }
-    }
+    );
 
-    res.status(200).json({ message: "Notifications marked as seen." });
+    res.status(200).json({ message: 'Notifications marked as seen.' });
   } catch (error) {
-    console.error("Error marking notifications as seen:", error);
-    res.status(500).send("Internal Server Error");
+    console.error('Error marking notifications as seen:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
