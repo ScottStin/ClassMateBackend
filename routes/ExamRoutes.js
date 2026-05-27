@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const examModel = require('../models/exam-model');
+const {examModel, Enrollment, Completion} = require('../models/exam-model');
 const { questionModel, questionSubmissionModel } = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
@@ -12,18 +12,40 @@ const { createQuestion, deleteQuestion } = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
     try {
-        // Extract the currentSchoolId from the query parameters
         const currentSchoolId = req.query.currentSchoolId;
-      
-        // If currentSchoolId is provided, filter exam by schoolId
-        let filter = {};
-        if (currentSchoolId) {
-          filter = { schoolId: currentSchoolId };
-        }
+        let filter = currentSchoolId ? { schoolId: currentSchoolId } : {};
 
-        await examModel.find(filter)
-        .then(exams => {res.json(exams)})
-        .catch(err => res.status(400).json('Error: ' + err));
+        // Fetch exams as plain JavaScript objects
+        const exams = await examModel.find(filter).lean();
+
+        // Fetch all relevant enrollments and completions for this school
+        const examIds = exams.map(e => e._id);
+        
+        const enrollments = await Enrollment.find({ examId: { $in: examIds } });
+        const completions = await Completion.find({ examId: { $in: examIds } });
+
+        // Map the data back into the exam objects
+        const result = exams.map(exam => {
+            return {
+                ...exam,
+                // Map Enrollments
+                studentsEnrolled: enrollments
+                    .filter(e => e.examId.toString() === exam._id.toString())
+                    .map(e => e.studentId),
+                
+                // Map Completions
+                studentsCompleted: completions
+                    .filter(c => c.examId.toString() === exam._id.toString())
+                    .map(c => ({ studentId: c.studentId, mark: c.mark })),
+                
+                // Map AI Completion status
+                aiMarkingComplete: completions
+                    .filter(c => c.examId.toString() === exam._id.toString() && c.aiMarked)
+                    .map(c => ({ studentId: c.studentId }))
+            };
+        });
+
+        res.json(result);
     } catch (error) {
         console.error("Error getting exams:", error);
         res.status(500).send("Internal Server Error");
@@ -64,18 +86,37 @@ router.post('/new', async (req, res) => {
     if (createdExam.default) {
       await examModel.updateMany({ default: true, _id: { $ne: createdExam._id } }, { $set: { default: false } });
     }
-    res.status(201).json(createdExam);
 
     // Emit event to all student's in school
-    if(createdExam?.schoolId) {
+    const examToEmit = await populateExamWithEnrollment(createdExam._id);
+  
+    if(examToEmit?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + createdExam.schoolId, {action: 'examCreated', data: createdExam});
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examCreated', data: examToEmit});
     }
+
+    res.status(201).json(examToEmit);
   } catch (error) {
     console.error("Error creating new exam or adding questions:", error);
     res.status(500).send("Internal Server Error");
   }
 });
+
+// populate the exam with enrollment and completion so it can be returned correctly to the frontend end sockets
+const populateExamWithEnrollment = async (examId) => {
+  const exam = await examModel.findById(examId).lean();
+  if (!exam) return null;
+
+  const enrollments = await Enrollment.find({ examId });
+  const completions = await Completion.find({ examId });
+
+  return {
+      ...exam,
+      studentsEnrolled: enrollments.map(e => e.studentId),
+      studentsCompleted: completions.map(c => ({ studentId: c.studentId, mark: c.mark })),
+      aiMarkingComplete: completions.filter(c => c.aiMarked).map(c => ({ studentId: c.studentId }))
+  };
+};
 
 router.patch('/register/:id', async (req, res) => {
   try {
@@ -87,19 +128,23 @@ router.patch('/register/:id', async (req, res) => {
 
     const userId = req.body._id;
 
-    if (exam.studentsEnrolled.includes(userId)) {
+    // Check Enrollment model
+    const existingEnrollment = await Enrollment.findOne({ examId: exam._id, studentId: userId });
+    if (existingEnrollment) {
       return res.status(400).json('User has already signed up for this exam');
     }
 
-    exam.studentsEnrolled.push(userId);
-    await exam.save();
+    // Create record in the collection
+    await Enrollment.create({ examId: exam._id, studentId: userId });
 
-    res.json(`Student added to: ${exam}`);
-
-    if(exam?.schoolId) {
+    // emit socket
+    const examToEmit = await populateExamWithEnrollment(exam._id);
+    if(examToEmit?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examUpdated', data: examToEmit});
     }
+    
+    res.json(`Student added to: ${examToEmit._id}`);
   } catch (error) {
     console.error("Error joining exam:", error);
     res.status(500).send("Internal Server Error");
@@ -210,17 +255,14 @@ router.patch('/update-exam/:id', async (req, res) => {
 
     await exam.save();
   
-    // await questionModel.deleteMany({
-    //   examId: exam._id,
-    //   _id: { $nin: incomingIds.filter((id) => typeof id === 'string' && id !== '[object Object]') }
-    // });
-
-    res.json(`Exam updated: ${exam._id}`);
-
-    if(exam?.schoolId) {
+    // socket:
+    const examToEmit = await populateExamWithEnrollment(exam._id);
+    if(examToEmit?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examUpdated', data: examToEmit});
     }
+
+    res.json(`Exam updated: ${examToEmit._id}`);
   } catch (error) {
     console.error("Error updating exam:", error);
     res.status(500).send("Internal Server Error");
@@ -234,14 +276,20 @@ router.patch('/reset-student-exam/:id', async (req, res) => {
 
     if (!studentId) return res.status(400).json('Student ID required');
 
-    // 1. Find all submissions for this student in this exam
+    // Update the exam completion status
+    const exam = await examModel.findById(examId);
+    if (!exam) return res.status(404).json('Exam not found');
+
+    const schoolId = exam.schoolId; 
+
+    // Find all submissions for this student in this exam
     const submissions = await questionSubmissionModel.find({ examId, studentId });
 
-    // 2. Delete audio files from Cloudinary for those submissions
+    // Delete audio files from Cloudinary for those submissions
     for (const sub of submissions) {
       if (sub.response && sub.response.includes('cloudinary.com')) {
-         // Logic to extract public_id and delete
          const fileName = sub.response.split("/").pop().split(".")[0];
+         // schoolId is now safely defined for this string interpolation
          await cloudinary.uploader.destroy(`${schoolId}/exam-question-responses/${examId}/${fileName}`, { resource_type: 'video' });
       }
     }
@@ -250,12 +298,17 @@ router.patch('/reset-student-exam/:id', async (req, res) => {
     await questionSubmissionModel.deleteMany({ examId, studentId });
 
     // 4. Update the exam completion status
-    const exam = await examModel.findById(examId);
-    exam.studentsCompleted = exam.studentsCompleted.filter((s) => s.studentId !== studentId);
-    await exam.save();
+    await Completion.deleteMany({ examId, studentId });
+
+    // emit socket event
+
+    const examToEmit = await populateExamWithEnrollment(exam._id);
+    if(examToEmit?.schoolId) {
+      const io = getIo();
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examUpdated', data: examToEmit});
+    }
 
     res.json(`Student exam reset successfully`);
-    // ... emit socket event
   } catch (error) {
     console.error("Error resetting student exam:", error);
     res.status(500).send("Internal Server Error");
@@ -272,21 +325,27 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     const studentIds = req.body.studentIds;
 
-    for(const studentId of studentIds) {
-      if (exam.studentsEnrolled.includes(studentId)) {
-        // res.status(400).json('User has already signed up for this exam');
-        continue
-      }
-      exam.studentsEnrolled.push(studentId);
+    const existingEnrollments = await Enrollment.find({ 
+        examId: exam._id, 
+        studentId: { $in: studentIds } 
+    });
+    const existingIds = existingEnrollments.map(e => e.studentId);
+    
+    const newEnrollments = studentIds
+        .filter(id => !existingIds.includes(id))
+        .map(id => ({ examId: exam._id, studentId: id }));
+
+    if (newEnrollments.length > 0) {
+        await Enrollment.insertMany(newEnrollments);
     }
-    await exam.save();
-    res.json(exam);
 
-
-    if(exam?.schoolId) {
+    const examToEmit = await populateExamWithEnrollment(exam._id);
+    if(examToEmit?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examUpdated', data: examToEmit});
     }
+
+    res.json(examToEmit);
   } catch (error) {
     console.error("Error joining exam:", error);
     res.status(500).send("Internal Server Error");
@@ -303,33 +362,28 @@ router.patch('/un-enrol-student-from-exam/:id', async (req, res) => {
 
     const studentId = req.body.studentId;
 
-    if (!exam.studentsEnrolled.includes(studentId)) {
-      res.status(400).json('User is not currently enrolled in this exam');
-      return;
+    const isEnrolled = await Enrollment.findOne({ examId: exam._id, studentId });
+    if (!isEnrolled) {
+      return res.status(400).json('User is not currently enrolled in this exam');
     }
 
-    if(exam.studentsCompleted.map(
-        (studentCompleted) => studentCompleted.studentId
-      ).includes(studentId)) {
-        res.status(400).json('User has already completed the exam and therefore cannot be removed');
-        return;
-      }
+    const hasCompleted = await Completion.findOne({ examId: exam._id, studentId });
+    if (hasCompleted) {
+      return res.status(400).json('User has already completed the exam and therefore cannot be removed');
+    }
   
-      exam.studentsEnrolled = exam.studentsEnrolled.filter(
-        (s) => s !== studentId
-      );
+    // Delete the enrollment record
+    await Enrollment.deleteOne({ examId: exam._id, studentId });
     
-    await exam.save();
-    res.json(exam);
-
-
-    if(exam?.schoolId) {
+    const examToEmit = await populateExamWithEnrollment(exam._id);
+    if(examToEmit?.schoolId) {
       const io = getIo();
-      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
+      io.emit('examEvent-' + examToEmit.schoolId, {action: 'examUpdated', data: examToEmit});
     }
 
+    res.json(examToEmit);
   } catch (error) {
-    console.error("Error joining exam:", error);
+    console.error("Error un enrolling from exam:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -353,6 +407,10 @@ router.delete('/bulk-delete', async (req, res) => {
     await questionModel.deleteMany({ examId: { $in: examIds } });
     await questionSubmissionModel.deleteMany({ examId: { $in: examIds } });
 
+    // Delete relational participation data
+    await Enrollment.deleteMany({ examId: { $in: examIds } });
+    await Completion.deleteMany({ examId: { $in: examIds } });
+
     // Delete cloudinary folders for each exam
     for (const exam of examsToDelete) {
       const schoolId = exam.schoolId;
@@ -374,8 +432,6 @@ router.delete('/bulk-delete', async (req, res) => {
     // Now delete exams
     await examModel.deleteMany({ _id: { $in: examIds } });
 
-    res.status(200).json(examsToDelete);
-
     // Emit socket events
     const io = getIo();
     examsToDelete.forEach(exam => {
@@ -385,6 +441,7 @@ router.delete('/bulk-delete', async (req, res) => {
       );
     });
 
+    res.status(200).json(examsToDelete);
   } catch (error) {
     console.error('Error bulk deleting exams:', error);
     res.status(500).send('Internal Server Error');
@@ -417,6 +474,10 @@ router.delete('/:id', async (req, res) => {
     await questionModel.deleteMany({ examId });
     await questionSubmissionModel.deleteMany({ examId });
 
+    // Delete relational participation data
+    await Enrollment.deleteMany({ examId });
+    await Completion.deleteMany({ examId });
+
     const schoolId = deletedExam.schoolId;
 
     // Delete exam prompts
@@ -431,8 +492,6 @@ router.delete('/:id', async (req, res) => {
     const folderPathCoverPhoto = `${schoolId}/exam-prompts/${examId}/cover-photo`;
     await deleteCloudinaryFolderIfExists(folderPathCoverPhoto);
 
-    res.status(200).json(deletedExam);
-
     // Emit event to all students in school
     if(deletedExam?.schoolId) {
       const io = getIo();
@@ -441,6 +500,8 @@ router.delete('/:id', async (req, res) => {
         { action: 'examDeleted', data: deletedExam }
       );
     }
+
+    res.status(200).json(deletedExam);
 
   } catch (error) {
     console.error("Error deleting exam:", error);

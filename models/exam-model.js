@@ -20,15 +20,6 @@ const examSchema = mongoose.Schema({
         required: true,
         maxlength: 500,
     },
-    studentsEnrolled:[
-        { type: String }
-    ],
-    studentsCompleted: [
-        {
-            studentId: { type: String },
-            mark: {type: String, default: null}
-        }
-    ],
     totalPointsMin: { 
         type: Number, 
         default: 0, 
@@ -45,9 +36,7 @@ const examSchema = mongoose.Schema({
         min: 1, 
         max: 1000,
     },
-    questions: [
-        { type: String }
-    ],
+    questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'questionModel' }],
     casualPrice:{ 
         type: Number,
         default: 0, 
@@ -63,11 +52,6 @@ const examSchema = mongoose.Schema({
         type: String,
         required: true,
     },
-    aiMarkingComplete:[
-        {
-            studentId: { type: String },
-        }
-    ],
     schoolId:{
         type: String,
         required: true,
@@ -76,8 +60,26 @@ const examSchema = mongoose.Schema({
     timestamps: true
 })
 
+// Enrollment Schema
+const enrollmentSchema = new mongoose.Schema({
+    examId: { type: mongoose.Schema.Types.ObjectId, ref: 'examModel', required: true, index: true },
+    studentId: { type: String, required: true, index: true }
+}, { timestamps: true });
+
+// Completion Schema (Handles marks and AI status)
+const completionSchema = new mongoose.Schema({
+    examId: { type: mongoose.Schema.Types.ObjectId, ref: 'examModel', required: true, index: true },
+    studentId: { type: String, required: true, index: true },
+    mark: { type: String, default: null },
+    aiMarked: { type: Boolean, default: false }
+}, { timestamps: true });
+
 examSchema.path('questions').validate(function(value) {
   return value.length <= MAX_QUESTIONS;
 }, `You can only have up to ${MAX_QUESTIONS} questions.`);
 
-module.exports = mongoose.model('examModel', examSchema);
+module.exports = {
+    examModel: mongoose.model('examModel', examSchema),
+    Enrollment: mongoose.model('Enrollment', enrollmentSchema),
+    Completion: mongoose.model('Completion', completionSchema)
+};
