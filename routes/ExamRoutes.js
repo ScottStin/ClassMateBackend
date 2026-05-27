@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const examModel = require('../models/exam-model');
-const questionModel = require("../models/question-model");
+const { questionModel, questionSubmissionModel } = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
 const {
@@ -167,13 +167,14 @@ router.patch('/update-exam/:id', async (req, res) => {
 
     // ---------------- DELETE ----------------
     if (idsToDelete.length) {
-      const deleteDocs = await questionModel.find({
-        _id: { $in: idsToDelete }
-      });
+        const deleteDocs = await questionModel.find({
+            _id: { $in: idsToDelete }
+        });
 
-      for (const q of deleteDocs) {
-        await deleteQuestion(q, exam._id, exam.schoolId);
-      }
+        for (const q of deleteDocs) {
+            await deleteQuestion(q, exam._id, exam.schoolId);
+            await questionSubmissionModel.deleteMany({ questionId: q._id });
+        }
     }
 
     // ---------------- UPDATE ----------------
@@ -228,79 +229,35 @@ router.patch('/update-exam/:id', async (req, res) => {
 
 router.patch('/reset-student-exam/:id', async (req, res) => {
   try {
+    const examId = req.params.id;
+    const { studentId } = req.body;
 
-    const exam = await examModel.findById(req.params.id);
-    if (!exam) {
-      return res.status(404).json('Exam not found');
-    }
-  
-    let questions = await questionModel.find({examId: exam._id})
-    if (!questions || questions.length === 0) {
-      return res.status(404).json('Questions not found');
-    }
+    if (!studentId) return res.status(400).json('Student ID required');
 
-    const studentId = req.body.studentId;
-    if (!studentId) {
-      return res.status(404).json('Student not found');
-    }
+    // 1. Find all submissions for this student in this exam
+    const submissions = await questionSubmissionModel.find({ examId, studentId });
 
-    const schoolId = exam.schoolId;
-    if (!schoolId) {
-      return res.status(404).json('School not found');
-    }
-
-    for (const question of questions) {
-      if(!question.studentResponse || question.studentResponse.length === 0) {
-        continue;
-      }
-
-      const studentResponse = question.studentResponse.find(
-        (response) => response.studentId.toString() === studentId.toString()
-      )
-
-      if(!studentResponse) {
-        continue;
-      }
-
-      question.studentResponse = question.studentResponse.filter(
-        (response) => response.studentId.toString() !== studentId.toString()
-      );
-      await question.save();
-
-      if(!['audio-response', 'repeat-sentence', 'read-outloud'].includes(question.type)) {
-        continue;
-      }
-
-      const fileName = studentResponse.response.split("/").pop().split(".")[0];
-      const cloudinaryFilePath = `${schoolId}/exam-question-responses/${exam._id}/${fileName}`;
-
-      try {
-        const cloudinaryFilePath = `${schoolId}/exam-question-responses/${exam._id}/${fileName}`;
-
-        console.log('Deleting from Cloudinary:', cloudinaryFilePath);
-
-        const result = await cloudinary.uploader.destroy(cloudinaryFilePath, {
-          resource_type: 'video', // REQUIRED for audio/video uploads
-          invalidate: true        // optional: clears cached versions
-        });
-
-        console.log('Cloudinary destroy result:', result);
-      } catch (err) {
-        console.error('Error deleting student response:', err);
+    // 2. Delete audio files from Cloudinary for those submissions
+    for (const sub of submissions) {
+      if (sub.response && sub.response.includes('cloudinary.com')) {
+         // Logic to extract public_id and delete
+         const fileName = sub.response.split("/").pop().split(".")[0];
+         await cloudinary.uploader.destroy(`${schoolId}/exam-question-responses/${examId}/${fileName}`, { resource_type: 'video' });
       }
     }
-  
-    exam.studentsCompleted = exam.studentsCompleted.filter((student) => student.studentId !== studentId)
+
+    // 3. Remove all submission documents for this student/exam
+    await questionSubmissionModel.deleteMany({ examId, studentId });
+
+    // 4. Update the exam completion status
+    const exam = await examModel.findById(examId);
+    exam.studentsCompleted = exam.studentsCompleted.filter((s) => s.studentId !== studentId);
     await exam.save();
 
-    res.json(`Student exam questions reset: ${exam._id}`);
-
-    if(exam?.schoolId) {
-      const io = getIo();
-      io.emit('examEvent-' + exam.schoolId, {action: 'examUpdated', data: exam});
-    }
+    res.json(`Student exam reset successfully`);
+    // ... emit socket event
   } catch (error) {
-    console.error("Error resetting student's exam exam:", error);
+    console.error("Error resetting student exam:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -394,6 +351,7 @@ router.delete('/bulk-delete', async (req, res) => {
 
     // Delete related questions (like single delete does)
     await questionModel.deleteMany({ examId: { $in: examIds } });
+    await questionSubmissionModel.deleteMany({ examId: { $in: examIds } });
 
     // Delete cloudinary folders for each exam
     for (const exam of examsToDelete) {
@@ -414,7 +372,7 @@ router.delete('/bulk-delete', async (req, res) => {
     }
 
     // Now delete exams
-    await examModel.deleteMany({ id: { $in: examIds } });
+    await examModel.deleteMany({ _id: { $in: examIds } });
 
     res.status(200).json(examsToDelete);
 
@@ -457,6 +415,7 @@ router.delete('/:id', async (req, res) => {
 
     // Delete questions
     await questionModel.deleteMany({ examId });
+    await questionSubmissionModel.deleteMany({ examId });
 
     const schoolId = deletedExam.schoolId;
 

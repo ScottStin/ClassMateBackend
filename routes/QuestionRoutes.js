@@ -3,7 +3,7 @@ const router = express.Router();
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
 
-const questionModel = require("../models/question-model");
+const {questionModel, questionSubmissionModel} = require("../models/question-model");
 const examModel = require("../models/exam-model");
 const { courseworkModel } = require("../models/coursework-model.js");
 const userModel = require("../models/user-models");
@@ -12,28 +12,107 @@ const { createStudentStat } = require('./StudentStatsRoutes.js');
 /**
  * Get all exam questions
  */
+
 router.get('/', async function (req, res) {
-    try {
-      // Extract the examId from the query parameters
-      const examId = req.query.examId;
+  try {
+    // 1. Extract parameters from the query string
+    const { examId, userId, userType } = req.query;
 
-      // If examId is provided, filter questions by examId
-      let filter = {};
-      if (examId) {
-        filter = { examId: examId, parent: undefined || null };
-      }
+    let filter = {};
+    if (examId) {
+      // Clean up the 'undefined || null' evaluation to match top-level documents safely
+      filter = { examId: examId, parent: null };
+    }
 
-    // Populate subQuestion field with full documents
+    // 2. Fetch questions with populated sub-questions as plain editable JS objects (.lean())
     const questions = await questionModel.find(filter)
       .populate('subQuestions')
+      .lean() 
       .exec();
 
-    res.json(questions);
-
-    } catch (error) {
-        console.error("Error getting questions:", error);
-        res.status(500).send("Internal Server Error");
+    // If there's no examId or role context, pass the raw questions right through
+    if (!examId || !userType) {
+      return res.json(questions);
     }
+
+    // 3. Fetch relevant submissions from our separate collection based on user role
+    let submissions = [];
+    if (userType.toLowerCase() === 'student' && userId) {
+      // Students only get to see their own answers
+      submissions = await questionSubmissionModel.find({ examId, studentId: userId }).lean();
+    } else {
+      // Teachers get to see all student answers for marking
+      submissions = await questionSubmissionModel.find({ examId }).lean();
+    }
+
+    // 4. Map submissions into a Map for ultra-fast O(1) lookups during nesting loops
+    const submissionMap = new Map();
+    
+    if (userType.toLowerCase() !== 'student') {
+      // Teachers need an array of submissions grouped per question ID
+      submissions.forEach(sub => {
+        const qId = sub.questionId.toString();
+        if (!submissionMap.has(qId)) submissionMap.set(qId, []);
+        submissionMap.get(qId).push(sub);
+      });
+    } else {
+      // Students only have a single submission object per question ID
+      submissions.forEach(sub => {
+        submissionMap.set(sub.questionId.toString(), sub);
+      });
+    }
+
+    // 5. Recursive function to handle deep-nesting arrays within 'subQuestions'
+    const stitchQuestionData = (question) => {
+      const qId = question._id.toString();
+
+      if (userType.toLowerCase() !== 'student') {
+        const questionSubs = submissionMap.get(qId) || [];
+        
+        question.studentResponse = questionSubs.map(sub => ({
+          studentId: sub.studentId,
+          response: sub.response,
+          mark: sub.mark,
+          feedback: sub.feedback
+        }));
+
+        question.studentsCompleted = questionSubs.map(sub => ({
+          studentId: sub.studentId,
+          dateComplete: sub.dateComplete
+        }));
+      } else {
+        // Handle student fallback layout maps
+        const userSub = submissionMap.get(qId);
+        
+        question.studentResponse = userSub ? [{
+          studentId: userSub.studentId,
+          response: userSub.response,
+          mark: userSub.mark,
+          feedback: userSub.feedback
+        }] : [];
+
+        question.studentsCompleted = userSub ? [{
+          studentId: userSub.studentId,
+          dateComplete: userSub.dateComplete
+        }] : [];
+      }
+
+      // Run recursively so sub-questions get their responses stitched too
+      if (question.subQuestions && question.subQuestions.length > 0) {
+        question.subQuestions.forEach(subQuestion => stitchQuestionData(subQuestion));
+      }
+    };
+
+    // 6. Execute the stitcher across all top-level questions found
+    questions.forEach(question => stitchQuestionData(question));
+
+    // Return the perfectly formatted array back to  frontend
+    return res.json(questions);
+
+  } catch (error) {
+    console.error("Error getting questions:", error);
+    return res.status(500).send("Internal Server Error");
+  }
 });
 
 /**
@@ -108,8 +187,13 @@ async function createQuestion(question, examId, schoolId) {
  * Delete Question
  */
 async function deleteQuestion(question, examId, schoolId) {
+  const targetQuestionId = question._id || question.questionId;
+
   // --- delete question document
-  await questionModel.findByIdAndDelete(question._id || question.questionId);
+  await questionModel.findByIdAndDelete(targetQuestionId);
+
+  // delete all associated submissions to prevent orphaned documents
+  await questionSubmissionModel.deleteMany({ questionId: targetQuestionId });
 
   // --- delete prompt assets
   const deleteAsset = async (fileString) => {
@@ -152,7 +236,7 @@ router.patch('/submit-exam/:id', async function (req, res) {
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
                     const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
 
-                    submitExamQuestion(submittedSubQuestionStudentResponse, currentStudent, exam, foundSubQuestion, submittedSubQuestion)
+                    await submitExamQuestion(submittedSubQuestionStudentResponse, currentStudent, exam, foundSubQuestion, submittedSubQuestion)
                 }
             } 
 
@@ -160,10 +244,10 @@ router.patch('/submit-exam/:id', async function (req, res) {
             else {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)
                 const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
-                submitExamQuestion(submittedStudentResponse, currentStudent, exam, foundQuestion, submittedQuestion)
+                await submitExamQuestion(submittedStudentResponse, currentStudent, exam, foundQuestion, submittedQuestion)
             }
         }
-        if (exam.studentsCompleted.includes({studentId: studentId, mark: null})) {
+        if (exam.studentsCompleted.some(student => student.studentId === studentId && student.mark === null)) {
             return res.status(400).json('User has already completed this exam');
         }
         exam.studentsCompleted.push({studentId: studentId, mark: null});
@@ -448,14 +532,21 @@ router.patch('/submit-exam/:id', async function (req, res) {
             }
         }
 
-        // -- Set studentResponse to an empty array if it's undefined, else save
-        if(foundQuestion.studentResponse === undefined || foundQuestion.studentResponse === null) {
-            foundQuestion.studentResponse = [submittedStudentResponse];
-            await foundQuestion.save();
-        } else {
-            foundQuestion.studentResponse.push(submittedStudentResponse);
-            await foundQuestion.save();
-        } 
+        // -- StudentResponse:
+        await questionSubmissionModel.findOneAndUpdate(
+            { 
+                questionId: foundQuestion._id, 
+                studentId: currentStudent._id, 
+                examId: exam._id 
+            },
+            { 
+                $set: { 
+                    response: submittedStudentResponse.response,
+                    mark: submittedStudentResponse.mark
+                } 
+            },
+            { upsert: true, new: true }
+        );
     }
   };
 
@@ -483,27 +574,18 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                     const submittedSubQuestion = req.body.questions.find((obj) => obj['_id'] === questionId).subQuestions.find((obj) => obj['_id'] === subQuestionId.toString())
                     const submittedSubQuestionStudentResponse = submittedSubQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
     
+                    //  student response
                     if(submittedSubQuestionStudentResponse){
-
-                        // Set studentResponse to an empty array if it's undefined
-                        if(foundSubQuestion.studentResponse === undefined || foundSubQuestion.studentResponse === null) {
-                            foundSubQuestion.studentResponse = [];
-                            await foundSubQuestion.save();
-                        } 
-
-                        // if the student hasn't answered the question, add an object in the student response array to represent them:
-                        if(!foundSubQuestion.studentResponse.find((obj)=>obj.studentId === studentId)) {
-                            foundSubQuestion.studentResponse.push({studentId:studentId, response: null, mark: null, feedback: null})
-                        }
-
-                        if(foundSubQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.mark !== undefined) {
-                            foundSubQuestion.studentResponse.find((obj)=>obj.studentId === studentId).mark = submittedSubQuestionStudentResponse.mark ?? null;
-                        }
-                        if(foundSubQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.feedback !== undefined) {
-                            foundSubQuestion.studentResponse.find((obj)=>obj.studentId === studentId).feedback = submittedSubQuestionStudentResponse.feedback ?? null;
-                        }
-                        await foundSubQuestion.save();
-                        // } 
+                        await questionSubmissionModel.findOneAndUpdate(
+                            { questionId: subQuestionId, studentId: studentId, examId: exam._id },
+                            {
+                                $set: {
+                                    ...(submittedSubQuestionStudentResponse.mark !== undefined && { 'mark': submittedSubQuestionStudentResponse.mark }),
+                                    ...(submittedSubQuestionStudentResponse.feedback !== undefined && { 'feedback': submittedSubQuestionStudentResponse.feedback })
+                                }
+                            },
+                            { upsert: true }
+                        );
                     }
                 }
                 
@@ -511,28 +593,18 @@ router.patch('/submit-feedback/:id', async function (req, res) {
                 const submittedQuestion = req.body.questions.find((obj) => obj['_id'] === questionId)    
                 const submittedStudentResponse = submittedQuestion?.studentResponse?.find((obj)=>obj.studentId === studentId)
 
+                //  student response
                 if(submittedStudentResponse){
-                    // Set studentResponse to an empty array if it's undefined
-                    if(foundQuestion.studentResponse === undefined || foundQuestion.studentResponse === null) {
-                        foundQuestion.studentResponse = [];
-                        await foundQuestion.save();
-                    } 
-
-                    // if the student hasn't answered the question, add an object in the student response array to represent them:
-                    if(!foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId)) {
-                        foundQuestion.studentResponse.push({studentId:studentId, response: null, mark: null, feedback: null})
-                    }
-
-                    if(foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.mark !== undefined) {
-                        foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId).mark = submittedStudentResponse.mark ?? null;
-                    }
-                    if(foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.feedback !== undefined) {
-                        foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId).feedback = submittedStudentResponse.feedback ?? null;
-                    }
-                    // foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.mark =  submittedStudentResponse.mark ?? null;
-                    // foundQuestion.studentResponse.find((obj)=>obj.studentId === studentId)?.feedback =  submittedStudentResponse.feedback ?? null;
-                    await foundQuestion.save();
-                    // } 
+                     await questionSubmissionModel.findOneAndUpdate(
+                        { questionId: foundQuestion._id, studentId: studentId, examId: exam._id },
+                        {
+                            $set: {
+                                ...(submittedStudentResponse.mark !== undefined && { 'mark': submittedStudentResponse.mark }),
+                                ...(submittedStudentResponse.feedback !== undefined && { 'feedback': submittedStudentResponse.feedback })
+                            }
+                        },
+                        { upsert: true }
+                    );
                 }
             }
         }
@@ -572,25 +644,14 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
       return res.status(404).json({ message: 'Question not found' });
     }
 
-    if (!foundQuestion.studentsCompleted) {
-        foundQuestion.studentsCompleted = [];
-    }
-
-    const alreadyExists = foundQuestion.studentsCompleted.some(
-      sc => sc.studentId.toString() === studentId
+    await questionSubmissionModel.findOneAndUpdate(
+        { questionId: questionId, studentId: studentId, examId: foundQuestion.examId },
+        { $set: { dateComplete: new Date() } },
+        { upsert: true, new: true }
     );
 
-    if (!alreadyExists) {
-      foundQuestion.studentsCompleted.push({
-        studentId,
-        dateComplete: new Date()
-      });
-
-      await foundQuestion.save();
-    }
-
     const course = await courseworkModel.findById(foundQuestion.examId)
-    const minutes = course.estimatedMinutesToComplete / course.questions.length
+    const minutes = course?.estimatedMinutesToComplete / course?.questions?.length
 
     if(foundQuestion) {
         await createStudentStat({
@@ -634,44 +695,19 @@ router.patch('/manually-edit-question-score/:id', async function (req, res) {
       return res.status(404).json({ message: 'Question not found' });
     }
 
-    // if (!foundQuestion.studentsCompleted) {
-    //   foundQuestion.studentsCompleted = [];
-    // }
-    // if (!foundQuestion.studentResponse) {
-    //   foundQuestion.studentResponse = [];
-    // }
+    // Update the mark directly on the isolated submission document
+    const submission = await questionSubmissionModel.findOne({ 
+        questionId: questionId, 
+        studentId: studentId 
+    });
 
-    // find student response
-    let foundResponse = foundQuestion.studentResponse.find(
-      (response) => response.studentId === studentId
-    );
-
-    // // if student has no response yet, create it
-    // if (!foundResponse) {
-    //   foundResponse = {
-    //     studentId: studentId,
-    //     response: null,
-    //     mark: {},
-    //     feedback: { text: null, teacher: null },
-    //   };
-
-    //   foundQuestion.studentResponse.push(foundResponse);
-
-    //   // re-get reference after push
-    //   foundResponse = foundQuestion.studentResponse.find(
-    //     (x) => x.studentId === studentId
-    //   );
-    // }
-
-    // make sure mark exists
-    if (!foundResponse.mark) {
-      foundResponse.mark = {};
+    if (!submission) {
+        return res.status(404).json({ message: 'Student submission not found' });
     }
 
-    // update score (stored as string in schema)
-    foundResponse.mark.totalMark = score.toString();
-
-    await foundQuestion.save();
+    if (!submission.mark) submission.mark = {};
+    submission.mark.totalMark = score.toString();
+    await submission.save();
 
     return res.json(foundQuestion);
   } catch (err) {
