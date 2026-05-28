@@ -80,6 +80,6 @@ examSchema.path('questions').validate(function(value) {
 
 module.exports = {
     examModel: mongoose.model('examModel', examSchema),
-    Enrollment: mongoose.model('Enrollment', enrollmentSchema),
-    Completion: mongoose.model('Completion', completionSchema)
+    examEnrollmentModel: mongoose.model('examEnrollmentModel', enrollmentSchema),
+    examCompletionModel: mongoose.model('examCompletionModel', completionSchema)
 };

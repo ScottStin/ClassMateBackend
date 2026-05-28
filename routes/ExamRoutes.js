@@ -1,14 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const {examModel, Enrollment, Completion} = require('../models/exam-model');
+const {examModel, examEnrollmentModel, examCompletionModel} = require('../models/exam-model');
 const { questionModel, questionSubmissionModel } = require("../models/question-model");
 const { cloudinary, storage } = require('../cloudinary');
 const { getIo } = require('../socket-io');
 const {
   deleteCloudinaryFolderIfExists
 } = require('../file-helper.js');
-const { createQuestion, deleteQuestion } = require('./QuestionRoutes');
+const { createQuestion, deleteQuestion, populateExamWithEnrollment} = require('./QuestionRoutes');
 
 router.get('/', async function (req, res) {
     try {
@@ -21,8 +21,8 @@ router.get('/', async function (req, res) {
         // Fetch all relevant enrollments and completions for this school
         const examIds = exams.map(e => e._id);
         
-        const enrollments = await Enrollment.find({ examId: { $in: examIds } });
-        const completions = await Completion.find({ examId: { $in: examIds } });
+        const enrollments = await examEnrollmentModel.find({ examId: { $in: examIds } });
+        const completions = await examCompletionModel.find({ examId: { $in: examIds } });
 
         // Map the data back into the exam objects
         const result = exams.map(exam => {
@@ -102,22 +102,6 @@ router.post('/new', async (req, res) => {
   }
 });
 
-// populate the exam with enrollment and completion so it can be returned correctly to the frontend end sockets
-const populateExamWithEnrollment = async (examId) => {
-  const exam = await examModel.findById(examId).lean();
-  if (!exam) return null;
-
-  const enrollments = await Enrollment.find({ examId });
-  const completions = await Completion.find({ examId });
-
-  return {
-      ...exam,
-      studentsEnrolled: enrollments.map(e => e.studentId),
-      studentsCompleted: completions.map(c => ({ studentId: c.studentId, mark: c.mark })),
-      aiMarkingComplete: completions.filter(c => c.aiMarked).map(c => ({ studentId: c.studentId }))
-  };
-};
-
 router.patch('/register/:id', async (req, res) => {
   try {
     const exam = await examModel.findById(req.params.id);
@@ -129,13 +113,13 @@ router.patch('/register/:id', async (req, res) => {
     const userId = req.body._id;
 
     // Check Enrollment model
-    const existingEnrollment = await Enrollment.findOne({ examId: exam._id, studentId: userId });
+    const existingEnrollment = await examEnrollmentModel.findOne({ examId: exam._id, studentId: userId });
     if (existingEnrollment) {
       return res.status(400).json('User has already signed up for this exam');
     }
 
     // Create record in the collection
-    await Enrollment.create({ examId: exam._id, studentId: userId });
+    await examEnrollmentModel.create({ examId: exam._id, studentId: userId });
 
     // emit socket
     const examToEmit = await populateExamWithEnrollment(exam._id);
@@ -298,7 +282,7 @@ router.patch('/reset-student-exam/:id', async (req, res) => {
     await questionSubmissionModel.deleteMany({ examId, studentId });
 
     // 4. Update the exam completion status
-    await Completion.deleteMany({ examId, studentId });
+    await examCompletionModel.deleteMany({ examId, studentId });
 
     // emit socket event
 
@@ -325,7 +309,7 @@ router.patch('/enrol-students/:id', async (req, res) => {
 
     const studentIds = req.body.studentIds;
 
-    const existingEnrollments = await Enrollment.find({ 
+    const existingEnrollments = await examEnrollmentModel.find({ 
         examId: exam._id, 
         studentId: { $in: studentIds } 
     });
@@ -336,7 +320,7 @@ router.patch('/enrol-students/:id', async (req, res) => {
         .map(id => ({ examId: exam._id, studentId: id }));
 
     if (newEnrollments.length > 0) {
-        await Enrollment.insertMany(newEnrollments);
+        await examEnrollmentModel.insertMany(newEnrollments);
     }
 
     const examToEmit = await populateExamWithEnrollment(exam._id);
@@ -362,18 +346,18 @@ router.patch('/un-enrol-student-from-exam/:id', async (req, res) => {
 
     const studentId = req.body.studentId;
 
-    const isEnrolled = await Enrollment.findOne({ examId: exam._id, studentId });
+    const isEnrolled = await examEnrollmentModel.findOne({ examId: exam._id, studentId });
     if (!isEnrolled) {
       return res.status(400).json('User is not currently enrolled in this exam');
     }
 
-    const hasCompleted = await Completion.findOne({ examId: exam._id, studentId });
+    const hasCompleted = await examCompletionModel.findOne({ examId: exam._id, studentId });
     if (hasCompleted) {
       return res.status(400).json('User has already completed the exam and therefore cannot be removed');
     }
   
     // Delete the enrollment record
-    await Enrollment.deleteOne({ examId: exam._id, studentId });
+    await examEnrollmentModel.deleteOne({ examId: exam._id, studentId });
     
     const examToEmit = await populateExamWithEnrollment(exam._id);
     if(examToEmit?.schoolId) {
@@ -408,8 +392,8 @@ router.delete('/bulk-delete', async (req, res) => {
     await questionSubmissionModel.deleteMany({ examId: { $in: examIds } });
 
     // Delete relational participation data
-    await Enrollment.deleteMany({ examId: { $in: examIds } });
-    await Completion.deleteMany({ examId: { $in: examIds } });
+    await examEnrollmentModel.deleteMany({ examId: { $in: examIds } });
+    await examCompletionModel.deleteMany({ examId: { $in: examIds } });
 
     // Delete cloudinary folders for each exam
     for (const exam of examsToDelete) {
@@ -448,6 +432,48 @@ router.delete('/bulk-delete', async (req, res) => {
   }
 });
 
+router.get('/badge-count', async (req, res) => {
+  try {
+    const { userId, schoolId } = req.query;
+
+    if (!userId || !schoolId) {
+      return res.status(400).json({ message: "userId and schoolId are required" });
+    }
+
+    const schoolExams = await examModel.find({ schoolId }, { _id: 1, assignedTeacherId: 1 }).lean();
+    const schoolExamIds = schoolExams.map(e => e._id);
+
+    // TEACHER COUNT: Exams assigned to this teacher where student has finished but has no mark yet
+    const teacherExamIds = schoolExams
+      .filter(e => e.assignedTeacherId === userId)
+      .map(e => e._id);
+
+    const examMarkingCount = teacherExamIds.length > 0
+      ? await examCompletionModel.countDocuments({ examId: { $in: teacherExamIds }, mark: null })
+      : 0;
+
+    // STUDENT COUNT: Enrolled exams minus completed exams within this school context
+    const enrolledExamIds = await examEnrollmentModel.find({ 
+      studentId: userId, 
+      examId: { $in: schoolExamIds } 
+    }).distinct('examId');
+
+    const completedExamIds = await examCompletionModel.find({ 
+      studentId: userId, 
+      examId: { $in: enrolledExamIds } 
+    }).distinct('examId');
+
+    // Active exams = enrolled exams that don't have a completion record yet
+    const examsCount = enrolledExamIds.length - completedExamIds.length;
+
+    return res.json({ examMarkingCount, examsCount });
+
+  } catch (error) {
+    console.error("Error fetching exam badge counts:", error);
+    return res.status(500).send("Internal Server Error");
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const examId  = req.params.id;
@@ -475,8 +501,8 @@ router.delete('/:id', async (req, res) => {
     await questionSubmissionModel.deleteMany({ examId });
 
     // Delete relational participation data
-    await Enrollment.deleteMany({ examId });
-    await Completion.deleteMany({ examId });
+    await examEnrollmentModel.deleteMany({ examId });
+    await examCompletionModel.deleteMany({ examId });
 
     const schoolId = deletedExam.schoolId;
 
