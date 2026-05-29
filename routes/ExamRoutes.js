@@ -173,14 +173,33 @@ router.patch('/update-exam/:id', async (req, res) => {
 
     await exam.save();
  
-    // ---------------- NORMALIZE ----------------
-    const getQid = q => (q._id || q.questionId || q).toString();
+    // ---------------- QUESTIONS ----------------
 
+    const getQid = q => (q._id || q.questionId || q).toString(); // normalize id
+
+    // Map out all incoming IDs recursively so nested sub-questions are tracked
     const incoming = req.body.questions || [];
-    const incomingIds = incoming.map(getQid);
+    const incomingIds = [];
+    const incomingMap = new Map();
 
-    // const existing = exam.questions || [];
-    // const existingIds = existing.map(getQid);
+    incoming.forEach(q => {
+      if (q) {
+        const id = getQid(q);
+        incomingIds.push(id);
+        incomingMap.set(id, q);
+
+        // Also track deeply nested children structures
+        if (Array.isArray(q.subQuestions)) {
+          q.subQuestions.forEach(sub => {
+            if (sub) {
+              const subId = getQid(sub);
+              incomingIds.push(subId);
+              incomingMap.set(subId, sub);
+            }
+          });
+        }
+      }
+    });
 
     const dbQuestions = await questionModel.find(
       { examId: exam._id },
@@ -207,10 +226,11 @@ router.patch('/update-exam/:id', async (req, res) => {
     }
 
     // ---------------- UPDATE ----------------
-    for (const q of incoming.filter(q => idsToUpdate.includes(getQid(q)))) {
-      const doc = await questionModel.findById(getQid(q));
-      if (doc) {
-        doc.name = q.name;
+    for (const id of idsToUpdate) {
+      const doc = await questionModel.findById(id);
+      const incomingData = incomingMap.get(id);
+      if (doc && incomingData) {
+        doc.name = incomingData.name;
         await doc.save();
       }
     }
