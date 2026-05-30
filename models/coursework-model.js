@@ -1,6 +1,10 @@
 const mongoose = require('mongoose');
 const MAX_QUESTIONS = 100;
 
+// ==========================================
+// PRIMARY COURSEWORK SCHEMA
+// ==========================================
+
 const courseworkSchema = new mongoose.Schema({
     id:{
         type: String,
@@ -25,13 +29,10 @@ const courseworkSchema = new mongoose.Schema({
         url:String,
         fileName:String
     },
-    questions: [
-      {
-        // _id: { type: String },
-        questionId: { type: String },
-        studentsCompleted: [{type: String}]
-       }
-    ],
+    questions: [{ 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'questionModel' 
+    }],
     casualPrice:{ 
         type: Number,
         default: 0, 
@@ -52,13 +53,21 @@ const courseworkSchema = new mongoose.Schema({
     timestamps: true
 })
 
+courseworkSchema.path('questions').validate(function(value) {
+  return value.length <= MAX_QUESTIONS;
+}, `You can only have up to ${MAX_QUESTIONS} questions.`);
+
+// ==========================================
+// PAGE ELEMENT SCHEMA
+// ==========================================
+
 const courseworkPageElementSchema = new mongoose.Schema({
   id: {
     type: String,
     required: true,
   },
   type: {
-    type: String, // assuming enum values are stored as strings
+    type: String,
     required: true,
   },
   x: {
@@ -107,16 +116,38 @@ const courseworkPageElementSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-courseworkSchema.path('questions').validate(function(value) {
-  return value.length <= MAX_QUESTIONS;
-}, `You can only have up to ${MAX_QUESTIONS} questions.`);
+// ==========================================
+// RELATIONAL SCHEMAS (Anti-Infinite Arrays)
+// ==========================================
+
+// Enrollment Schema
+const courseworkEnrollmentSchema = new mongoose.Schema({
+    courseworkId: { type: mongoose.Schema.Types.ObjectId, ref: 'courseworkModel', required: true, index: true },
+    studentId: { type: String, required: true, index: true }
+}, { timestamps: true });
+
+// Prevent duplicate enrollments
+courseworkEnrollmentSchema.index({ courseworkId: 1, studentId: 1 }, { unique: true });
+
+// Completion Schema
+const courseworkCompletionSchema = new mongoose.Schema({
+    courseworkId: { type: mongoose.Schema.Types.ObjectId, ref: 'courseworkModel', required: true, index: true },
+    studentId: { type: String, required: true, index: true },
+    dateCompleted: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// Prevent duplicate completion records
+courseworkCompletionSchema.index({ courseworkId: 1, studentId: 1 }, { unique: true });
 
 const courseworkModel = mongoose.model('courseworkModel', courseworkSchema);
 const courseworkInfoPageModel = mongoose.model('courseworkInfoPageModel', courseworkPageElementSchema);
-
+const courseworkEnrollmentModel = mongoose.model('courseworkEnrollmentModel', courseworkEnrollmentSchema);
+const courseworkCompletionModel = mongoose.model('courseworkCompletionModel', courseworkCompletionSchema);
 
 module.exports = {
   courseworkModel,
   courseworkInfoPageModel,
   courseworkPageElementSchema,
+  courseworkEnrollmentModel,
+  courseworkCompletionModel,
 };
