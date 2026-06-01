@@ -19,12 +19,6 @@ const courseworkSchema = new mongoose.Schema({
         required: true,
         maxlength: 500,
     },
-    studentsEnrolled:[
-        { type: String }
-    ],
-    studentsCompleted: [
-        { type: String }
-    ],
     courseCoverPhoto:{
         url:String,
         fileName:String

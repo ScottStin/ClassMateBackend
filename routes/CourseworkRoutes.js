@@ -329,6 +329,90 @@ router.patch('/update-course/:id', async (req, res) => {
 
 /**
  * ====================
+ * Get badge count for sidenav menu
+ * ====================
+ */
+
+router.get('/badge-count/:studentId', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    if (!studentId) {
+      return res.status(400).json({ error: 'Student ID is required.' });
+    }
+
+    // 1. Fetch the course IDs the student is enrolled in
+    const enrollments = await courseworkEnrollmentModel.find(
+      { studentId: studentId },
+      { courseworkId: 1 }
+    );
+
+    // Convert ObjectIds to strings to match the String type used for examId
+    const courseIds = enrollments.map(e => e.courseworkId.toString());
+    if (!courseIds.length) {
+      return res.status(200).json({ count: 0 });
+    }
+
+    // 2. Fetch questions for these courses (Only pull IDs to keep memory low)
+    const allQuestions = await questionModel.find(
+      { examId: { $in: courseIds } },
+      { _id: 1, examId: 1 }
+    );
+
+    // 3. Fetch all completed question submissions for this student across these courses
+    const studentSubmissions = await questionSubmissionModel.find(
+      { 
+        studentId: studentId, 
+        examId: { $in: courseIds } 
+      },
+      { questionId: 1, examId: 1 }
+    );
+
+    let incompleteCount = 0;
+
+    // 4. Evaluate completion status 
+    for (const courseId of courseIds) {
+      
+      // Filter out questions belonging to this specific course
+      const courseQuestions = allQuestions.filter(q => q.examId === courseId);
+
+      // Frontend rule: If a course has no questions, it's 0% complete (Incomplete)
+      if (courseQuestions.length === 0) {
+        incompleteCount++;
+        continue;
+      }
+
+      // Filter student submissions belonging to this specific course
+      const courseSubmissions = studentSubmissions.filter(s => s.examId === courseId);
+      
+      // Map submission questionIds to a string Set for quick O(1) lookups
+      const completedQuestionIds = new Set(courseSubmissions.map(s => s.questionId.toString()));
+
+      // Count how many of this course's questions have a matching submission record
+      const completedCount = courseQuestions.filter(q => 
+        completedQuestionIds.has(q._id.toString())
+      ).length;
+
+      const percentageCompleted = Math.round(
+        (completedCount / courseQuestions.length) * 100
+      );
+
+      // If it evaluates to anything other than 100% ('Complete'), increment the badge
+      if (percentageCompleted !== 100) {
+        incompleteCount++;
+      }
+    }
+
+    return res.status(200).json({ count: incompleteCount });
+
+  } catch (error) {
+    console.error('Error calculating coursework badge count:', error);
+    return res.status(500).json({ error: 'Internal server error processing badge count.' });
+  }
+});
+
+/**
+ * ====================
  * Delete course (bulk)
  * ====================
  */

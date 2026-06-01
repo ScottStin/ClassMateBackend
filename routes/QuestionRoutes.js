@@ -673,7 +673,7 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
       return res.status(404).json({ message: 'Question not found' });
     }
 
-    await questionSubmissionModel.findOneAndUpdate(
+    const submission = await questionSubmissionModel.findOneAndUpdate(
         { questionId: questionId, studentId: studentId, examId: foundQuestion.examId },
         { $set: { dateComplete: new Date() } },
         { upsert: true, new: true }
@@ -691,6 +691,20 @@ router.patch('/mark-current-question-as-complete/:id', async function (req, res)
             comment: `course foundQuestion: ${foundQuestion.name}`,
             referenceId: foundQuestion._id,
         })
+    }
+
+    // Socket emit:
+    if (course?.schoolId) {
+      const io = getIo();
+      io.emit('questionEvent-' + course.schoolId, { 
+        action: 'questionCompleted', 
+        data: {
+          questionId: questionId,
+          examId: foundQuestion.examId, // (courseworkId)
+          studentId: studentId,
+          dateComplete: submission.dateComplete
+        } 
+      });
     }
 
     return res.json(foundQuestion);

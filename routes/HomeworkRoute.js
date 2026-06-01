@@ -333,9 +333,6 @@ router.get('/badge-count', async (req, res) => {
   try {
     const { userId, userType } = req.query;
 
-    console.log(userId)
-    console.log(userType)
-
     if (!userId || !userType) {
       return res.status(400).json({ message: 'Missing userId or userType parameters.' });
     }
@@ -348,7 +345,6 @@ router.get('/badge-count', async (req, res) => {
         }
       });
 
-      console.log(incompleteCount);
       return res.json({ count: incompleteCount });
     }
 
