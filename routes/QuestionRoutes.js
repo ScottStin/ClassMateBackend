@@ -790,4 +790,3 @@ module.exports = {
   deleteQuestion,
   populateExamWithEnrollment,
 };
-

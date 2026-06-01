@@ -239,7 +239,7 @@ router.post('/charge', async (req, res, next) => {
 
   router.post("/refund-payment", async (req, res, next) => {
     try {
-      // 1. ADD schoolId to your destructuring here
+      // 1. ADD schoolId to destructuring here
       const { paymentHistoryId, reason, amount, recipient, schoolId } = req.body;
 
       // 2. FIX: Use findOne with the correct field name

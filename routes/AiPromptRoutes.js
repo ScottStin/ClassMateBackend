@@ -10,7 +10,6 @@ const openai = new OpenAI({
 router.post('/audio', async (req, res) => {
 
     const { prompt, gender, accent } = req.body;
-
     
     if (!prompt || !gender || !accent) {
       return res.status(400).json({ error: 'Missing data' });
@@ -35,7 +34,10 @@ router.post('/audio', async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-audio-preview",
+      model: "gpt-audio-mini", 
+      // note - use "gpt-audio-mini" for cheaper option when testing
+      // note - use 'gpt-audio-1.5' for deployment
+      // todo - use env vars for prod vs dev to control this.
       modalities: ["text", "audio"],
       audio: {
         voice: selectedVoice,
@@ -83,7 +85,10 @@ router.post('/written', async (req, res) => {
 
   try {
       const completion = await openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-3.5-turbo', 
+          // note - use 'gpt-3.5-turbo' for cheaper option while testing
+          // note - use 'gpt-5' for deployment
+          // todo - use env vars for prod vs dev to control this.
           messages: [
             { role: 'user', content: prompt },
           ],
