@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+function limitTo100(val) {
+    return val.length <= 100;
+}
+
 const messageRecipientsSchema = new mongoose.Schema({
     userId: {
         type: String,
@@ -22,14 +26,6 @@ const messageAttachmentSchema = new mongoose.Schema({
     },
 });
 
-// const chatGroupSchema = new mongoose.Schema({
-//     groupName: {
-//         type: String,
-//         required: true,
-//     },
-//     members: [messageRecipientsSchema],
-// });
-
 const messageSchema = new mongoose.Schema({
     messageText: {
         type: String,
@@ -42,6 +38,7 @@ const messageSchema = new mongoose.Schema({
     recipients: {
         type: [messageRecipientsSchema],
         default: [],
+        validate: [limitTo100, '{PATH} exceeds the limit of 100 recipients.']
     },
     deleted: {
         type: Boolean,
@@ -52,10 +49,6 @@ const messageSchema = new mongoose.Schema({
         required: false,
     },
     attachment: messageAttachmentSchema,
-    // chatGroupId: {
-    //     type: String,
-    //     required: false,
-    // },
     conversationId: {
         type: String,
         required: false,
@@ -71,11 +64,16 @@ const messageSchema = new mongoose.Schema({
     savedByIds: {
         type: [String],
         default: [],
+        validate: [limitTo100, '{PATH} exceeds the limit of 100 saved references.']
     },
-    replies: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "messageModel"
-    }],
+    replies: {
+        type: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "messageModel"
+        }],
+        default: [],
+        validate: [limitTo100, '{PATH} exceeds the limit of 100 replies.']
+    },
     parentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "messageModel"

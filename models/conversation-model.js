@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+function participantLimit(val) {
+    return val.length <= 100;
+}
+
 const conversationSchema = mongoose.Schema({
     id:{
         type: String,
@@ -7,9 +11,10 @@ const conversationSchema = mongoose.Schema({
     groupName:{
         type: String,
     },
-    participantIds:[{
-        type: String,
-    }],
+    participantIds: {
+        type: [String],
+        validate: [participantLimit, '{PATH} exceeds the limit of 100 participants.']
+    },
     mostRecentMessage:{
         senderId: { type: String, default: null },
         messageText: { type: String, default: null },
