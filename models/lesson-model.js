@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+function limitTo100(val) {
+    return val.length <= 100;
+}
+
 const enrolmentSchema = new mongoose.Schema({
     studentId: { 
         type: String, 
@@ -52,10 +56,16 @@ const lessonSchema = mongoose.Schema({
         type: String,
         required:true,
     },
-    studentsEnrolled: [enrolmentSchema],
-    lessonStudentsAttended: [
-        {type: String,}
-    ],
+    studentsEnrolled: {
+        type: [enrolmentSchema],
+        default: [],
+        validate: [limitTo100, '{PATH} exceeds the maximum capacity of 100 enrolled students.']
+    },
+    lessonStudentsAttended: {
+        type: [String],
+        default: [],
+        validate: [limitTo100, '{PATH} exceeds the maximum cap of 100 attended records.']
+    },
     casualPrice:{
         type:Number,
         min: 0, 

@@ -20,10 +20,11 @@ const conversationSchema = mongoose.Schema({
         messageText: { type: String, default: null },
         createdAt: { type: String, default: null },
     },
-    usersTyping:[{
-        type: String,
-        required: false,
-    }],
+    usersTyping: {
+        type: [String],
+        default: [],
+        validate: [participantLimit, '{PATH} exceeds the limit of 100 typing users.']
+    },
 
     // --- params for group:
     groupName:{

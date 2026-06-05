@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const MAX_SUB_QUESTIONS = 100;
 const MAX_LIST_ITEMS = 20;
+const MAX_COURSEWORK_ELEMENTS = 50;
 
 const { courseworkPageElementSchema } = require('./coursework-model');
 
@@ -72,6 +73,10 @@ const questionSchema = mongoose.Schema({
 questionSchema.path('subQuestions').validate(function(value) {
   return value.length <= MAX_SUB_QUESTIONS;
 }, `You can only have up to ${MAX_SUB_QUESTIONS} sub-questions.`);
+
+questionSchema.path('courseworkInfoPageDetails').validate(function(value) {
+    return value.length <= MAX_COURSEWORK_ELEMENTS;
+}, `Coursework info page details list cannot exceed ${MAX_COURSEWORK_ELEMENTS} items.`);
 
 // Reusable validator function for the question lists
 const listLengthValidator = function(value) {

@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+function limitTo5(val) {
+    return val.length <= 5;
+}
+
 const schoolSchema = mongoose.Schema({
     name:{
         type: String,
@@ -69,12 +73,16 @@ const schoolSchema = mongoose.Schema({
     primaryButtonTextColor:{
         type: String,
     },
-    lessonTypes: [
-        {
-            name: String,
-            shortName: String,
-        }
-    ],
+    lessonTypes: {
+        type: [
+            {
+                name: String,
+                shortName: String,
+            }
+        ],
+        default: [],
+        validate: [limitTo5, '{PATH} exceeds the limit of 5 lesson types.']
+    },
     accreditationNumber: { 
         label: {
             type: String,

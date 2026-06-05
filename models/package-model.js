@@ -1,13 +1,32 @@
 const mongoose = require('mongoose');
 
-const studentsEnrolledSchema = new mongoose.Schema(
+function limitTo100(val) {
+    return val.length <= 100;
+}
+
+// ==========================================
+// PACKAGE ENROLMENT SCHEMA (Standalone Collection)
+// ==========================================
+
+const studentsEnrolledInPackageSchema = new mongoose.Schema(
   {
+    packageId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'packageModel', 
+        required: true 
+    },
     studentId: { type: String, required: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, default: null }
   },
-  { _id: false }
+  { timestamps: true }
 );
+
+studentsEnrolledInPackageSchema.index({ packageId: 1, studentId: 1 }, { unique: true });
+
+// ==========================================
+// COVER PHOTO SCHEMA
+// ==========================================
 
 const packageCoverPhotoSchema = new mongoose.Schema(
   {
@@ -16,6 +35,10 @@ const packageCoverPhotoSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+
+// ==========================================
+// MAIN PACKAGE SCHEMA
+// ==========================================
 
 const packageSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
@@ -34,16 +57,42 @@ const packageSchema = new mongoose.Schema({
     default: null
   },
   paymentLength: { type: Number, default: null },
-  courseIds: { type: [String], default: [] },
-  examIds: { type: [String], default: [] },
+
+  courseIds: { 
+    type: [String], 
+    default: [],
+    validate: [limitTo100, '{PATH} exceeds the limit of 100 courses.']
+  },
+  examIds: { 
+    type: [String], 
+    default: [],
+    validate: [limitTo100, '{PATH} exceeds the limit of 100 exams.']
+  },
+
   classHours: { type: Number, required: true },
   rolloverUnusedClasses: { type: Boolean, required: true, default: false },
   packageCoverPhoto: { type: packageCoverPhotoSchema, default: null },
-  studentsEnrolled: { type: [studentsEnrolledSchema], default: [] },
+
+  // studentsEnrolled: { type: [studentsEnrolledSchema], default: [] }, // removed and replaced with standalone collection for better performance and scalability
 
   stripeProductId: { type: String, default: null },
   stripePriceId: { type: String, default: null },
   stripeCurrency: { type: String, default: "usd" },
 });
 
-module.exports = mongoose.model('packageModel', packageSchema);
+// ==========================================
+// COMPILE AND EXPORT MODELS
+// ==========================================
+
+const packageModel = mongoose.model('packageModel', packageSchema);
+const packageEnrolmentModel = mongoose.model('packageEnrolmentModel', studentsEnrolledInPackageSchema);
+
+module.exports = {
+    packageModel,
+    packageEnrolmentModel
+};
+
+module.exports = {
+    packageModel,
+    packageEnrolmentModel
+};
