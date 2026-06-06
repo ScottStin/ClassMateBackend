@@ -51,7 +51,45 @@ const homeworkSchema = mongoose.Schema({
 });
 
 // ==========================================
-// 2. HOMEWORK COMMENT SCHEMA
+// 2. HOMEWORK ENROLLMENT SCHEMA
+// ==========================================
+
+const homeworkEnrollmentSchema = mongoose.Schema({
+    homeworkId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Homework',
+        required: true
+    },
+    studentId: {
+        type: String,
+        required: true
+    },
+    completed: {
+        type: Boolean,
+        default: false
+    }
+}, {
+    timestamps: true
+});
+
+homeworkEnrollmentSchema.index({ homeworkId: 1, studentId: 1 }, { unique: true });
+homeworkEnrollmentSchema.index({ studentId: 1 });
+
+// --- THE ENROLLMENT LIMITER ---
+homeworkEnrollmentSchema.pre('save', async function (next) {
+    if (this.isNew) {
+        const currentEnrollments = await this.constructor.countDocuments({ homeworkId: this.homeworkId });
+        
+        if (currentEnrollments >= 500) {
+            return next(new Error('Homework enrollment capacity reached. Maximum 500 students allowed.'));
+        }
+    }
+    next();
+});
+
+
+// ==========================================
+// 3. HOMEWORK COMMENT SCHEMA
 // ==========================================
 
 const homeworkCommentSchema = mongoose.Schema({
@@ -96,11 +134,14 @@ homeworkCommentSchema.index({ homeworkId: 1, createdAt: -1 });
 // MODELS & EXPORTS
 // ==========================================
 const homeworkModel = mongoose.model('homeworkModel', homeworkSchema);
+const homeworkEnrollmentModel = mongoose.model('homeworkEnrollmentModel', homeworkEnrollmentSchema);
 const homeworkCommentModel = mongoose.model('homeworkCommentModel', homeworkCommentSchema);
 
 module.exports = {
     homeworkModel,
+    homeworkEnrollmentModel,
     homeworkCommentModel,
     homeworkSchema,
+    homeworkEnrollmentSchema,
     homeworkCommentSchema
 };
