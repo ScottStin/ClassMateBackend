@@ -22,7 +22,7 @@ const studentsEnrolledInPackageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-studentsEnrolledInPackageSchema.index({ packageId: 1, studentId: 1 }, { unique: true });
+studentsEnrolledInPackageSchema.index({ packageId: 1, studentId: 1, startDate: 1 }, { unique: true });
 
 // ==========================================
 // COVER PHOTO SCHEMA

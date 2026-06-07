@@ -266,11 +266,12 @@ router.patch('/enrol-student/:id', async (req, res) => {
     }
 
     // 1. Add student to standalone package enrollment collection using upsert protection
-    await packageEnrolmentModel.findOneAndUpdate(
-      { packageId: req.params.id, studentId: studentId },
-      { $setOnInsert: { startDate: new Date(), endDate: null } },
-      { upsert: true }
-    );
+    await packageEnrolmentModel.create({
+      packageId: req.params.id,
+      studentId: studentId,
+      startDate: new Date(),
+      endDate: null
+    });
 
     const updatedPackageRaw = await packageModel.findById(req.params.id).lean();
 
@@ -349,7 +350,6 @@ router.patch('/enrol-student/:id', async (req, res) => {
     });
   }
 });
-
 
 /**
  * ==============================

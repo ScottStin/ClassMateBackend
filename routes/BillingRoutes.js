@@ -6,7 +6,7 @@ const Stripe = require('stripe');
 const { PaymentHistory } = require('../models/billing-model');
 const { getIo } = require('../socket-io');
 const { trackStudentActivity } = require('./StudentActivityRoute');
-const packageModel = require('../models/package-model');
+const {packageModel} = require('../models/package-model');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2023-08-16' // todo - update with latest version.
@@ -357,6 +357,7 @@ router.post('/start-subscription-payment', async (req, res, next) => {
     });
 
     if (activeSub) {
+      console.error('Student has active subscription already')
       return res.status(400).json({
         message: "User already has an active subscription. Cancel it before starting another.",
         subscriptionId: activeSub.id,
