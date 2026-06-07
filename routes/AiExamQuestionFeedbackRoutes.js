@@ -10,7 +10,7 @@ const fs = require("fs");
 const path = require("path");
 
 const openai = new OpenAI({
-    apiKey: process.env.APIKEY
+    apiKey: process.env.OPEN_AI_API_KEY
 });
 
   /**
@@ -36,7 +36,7 @@ const openai = new OpenAI({
 
       const whisperResponse = await axios.post("https://api.openai.com/v1/audio/transcriptions", formData, {
           headers: {
-            "Authorization": `Bearer ${process.env.APIKEY}`,
+            "Authorization": `Bearer ${process.env.OPEN_AI_API_KEY}`,
             ...formData.getHeaders(),
           },
         });
