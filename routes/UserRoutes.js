@@ -8,10 +8,11 @@ const jwt = require('jsonwebtoken');
 const { getIo } = require('../socket-io');
 const crypto = require('crypto');
 
-const examModel = require('../models/exam-model');
-const questionModel = require('../models/question-model');
+const { examModel, examEnrollmentModel, examCompletionModel } = require('../models/exam-model');
+const { questionSubmissionModel} = require('../models/question-model');
 const userModel = require('../models/user-models');
-const homeworkModel = require('../models/homework-model');
+const {homeworkCommentModel, homeworkEnrollmentModel} = require('../models/homework-model');
+const {courseworkEnrollmentModel, courseworkCompletionModel} = require('../models/coursework-model');
 const schoolModel = require('../models/school-models');
 
 /**
@@ -49,31 +50,41 @@ router.get('/', async (req, res) => {
 */
 
 router.post('/', async (req, res) => {
-  try {
 
+  try {
     // --- hash password and create new user:
-    const hashedPassword = await bcrypt.hash(req.body.unhashedPassword, 12)
+    const hashedPassword = await bcrypt.hash(req.body.unhashedPassword, 12);
     const newUser = await new userModel(req.body);
     newUser.hashedPassword = hashedPassword;
     const createdUser = await newUser.save();
     
     if (createdUser) {
       try {
-
         // --- enroll new users in default exam:
-        if(createdUser.userType === 'student') {
+        if (createdUser.userType === 'student') {
           const exam = await examModel.findOne({ default: true });
           if (!exam) {
             return res.status(404).json('Default exam not found');
           }
-          const userId = createdUser._id;
-      
-          if (exam.studentsEnrolled.includes(userId)) {
+          
+          const userId = createdUser._id.toString();
+          
+          // Check for existing enrollment in the new relational model
+          const existingEnrollment = await examEnrollmentModel.findOne({ 
+            examId: exam._id, 
+            studentId: userId 
+          });
+
+          if (existingEnrollment) {
             return res.status(400).json('User has already signed up for this exam');
           }
       
-          exam.studentsEnrolled.push(userId);
-          await exam.save();
+          // Create new enrollment document
+          const newEnrollment = new examEnrollmentModel({
+            examId: exam._id,
+            studentId: userId
+          });
+          await newEnrollment.save();
         }
 
         // --- add trial class minutes:
@@ -81,27 +92,31 @@ router.post('/', async (req, res) => {
         if (!school) {
           return res.status(404).json('School not found');
         }
+        
         createdUser.bulkPaymentClassHours = (school.freeInitClassHours ?? 0) / 60;
         await createdUser.save();
 
         // --- upload user photo to cloudinary:
-        if(createdUser.profilePicture?.url) {
-          await cloudinary.uploader.upload(createdUser.profilePicture.url, {folder: `${createdUser.schoolId}/user-profile-pictures`}, async (err, result)=>{
-            if (err) return console.error(err);  
-            createdUser.profilePicture = {url:result.url, fileName:result.public_id};
-            await createdUser.save();
-          })
+        if (createdUser.profilePicture?.url) {
+          const result = await cloudinary.uploader.upload(createdUser.profilePicture.url, {
+            folder: `${createdUser.schoolId}/user-profile-pictures`
+          });
+          createdUser.profilePicture = { url: result.url, fileName: result.public_id };
+          await createdUser.save();
         }
+
+        return res.status(201).json(createdUser);
+        
       } catch (error) {
-        res.status(500).send("Internal Server Error");
+        console.error("Inner error:", error);
+        return res.status(500).send("Internal Server Error"); 
       }
-    res.status(201).json(createdUser);
     } else {
-      res.status(500).send("Internal Server Error");
+      return res.status(500).send("Internal Server Error");
     }
   } catch (error) {
     console.error("Error creating user:", error);
-    res.status(500).send("Internal Server Error");
+    return res.status(500).send("Internal Server Error");
   }
 });
 
@@ -172,9 +187,7 @@ router.patch('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    const deletedUser = await userModel.findByIdAndDelete(
-      req.params.id,
-    );
+    const deletedUser = await userModel.findByIdAndDelete(req.params.id);
 
     if (!deletedUser) {
       return res.status(404).send('User not found');
@@ -188,49 +201,35 @@ router.delete('/:id', async (req, res) => {
       });
     }
 
-    // --- find user _id in questionModel studentResponse studentId and delete studentResponse:
-      await questionModel.updateMany(
-      {},
-      {
-        $pull: {
-          studentResponse: { studentId: deletedUser._id.toString() }
-        }
-      }
-    );
+    const userIdStr = deletedUser._id.toString();
 
-    // remove student from exam model:
-    await examModel.updateMany(
-    {},
-    {
-      $pull: {
-        studentsEnrolled: deletedUser._id.toString(),
-        studentsCompleted: { studentId: deletedUser._id.toString() },
-        aiMarkingComplete: { studentId: deletedUser._id.toString() }
-      }
-    }
-  );
+    // --- 1. Delete user's question submissions ---
+    await questionSubmissionModel.deleteMany({ studentId: userIdStr });
 
-    // --- delete user's comments from homework:
-    await homeworkModel.updateMany(
-  {},
-  {
-        $pull: {
-          comments: { studentId: deletedUser._id.toString() },
-          students: { studentId: deletedUser._id.toString() }
-        }
-      }
-    );
+    // --- 2. Delete user from exams (Enrollments & Completions) ---
+    await examEnrollmentModel.deleteMany({ studentId: userIdStr });
+    await examCompletionModel.deleteMany({ studentId: userIdStr });
 
-  //   // remove student from lessons:
-  //   await lessonModel.updateMany(
-  //   {},
-  //   {
-  //     $pull: {
-  //       studentsEnrolledIds: deletedUser._id.toString(),
-  //       lessonStudentsAttended: deletedUser._id.toString()
-  //     }
-  //   }
-  // ) // note - let's not delete a user from the lesson, so we can track number of students enrolled in historical lessons
+    // --- 3. Delete user from homework (Enrollments & Comments) ---
+    await homeworkEnrollmentModel.deleteMany({ studentId: userIdStr });
+    await homeworkCommentModel.deleteMany({ studentId: userIdStr });
+
+    // --- 4. Delete user from coursework (Enrollments & Completions) ---
+    await courseworkEnrollmentModel.deleteMany({ studentId: userIdStr });
+    await courseworkCompletionModel.deleteMany({ studentId: userIdStr });
+
+    // // remove student from lessons:
+    // await lessonModel.updateMany(
+    // {},
+    // {
+    //   $pull: {
+    //     studentsEnrolledIds: userIdStr,
+    //     lessonStudentsAttended: userIdStr
+    //   }
+    // }
+    // ) // note - let's not delete a user from the lesson, so we can track number of students enrolled in historical lessons
+
+    // todo - add delete user from package history too.
 
     res.status(201).json(deletedUser);
   } catch (error) {
@@ -238,7 +237,6 @@ router.delete('/:id', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
-
 /**
  * ==============================
  *  Login:
